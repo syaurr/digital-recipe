@@ -1,0 +1,5 @@
+{
+  "name": "Buku Resep Digital",
+  "description": "A digital recipe book application for kitchen crews and admins, featuring recipe management, category organization, and AI-powered step generation with Gemini.",
+  "requestFramePermissions": []
+}
