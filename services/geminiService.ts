@@ -1,123 +1,78 @@
-// services/geminiService.ts
+import { GoogleGenerativeAI } from "@google/generative-ai";
 
-// 🟢 MASUKKAN API KEY ANDA DI SINI
-const API_KEY = "AIzaSyB8GBT3Gdn9T0GfYIzh4oAmgm2E1ySvTRI"; 
+// 🟢 KUNCI API ANDA (Biarkan yang ini, karena sudah terbukti VALID)
+const API_KEY = "AIzaSyCJJcgLO33crJS2DNU_3VL7wJglfP1iNIo"; 
 
 export const generateRecipeSteps = async (inputData: any) => {
-  // 1. CEK API KEY
-  if (!API_KEY || API_KEY.includes("PASTE_KODE")) {
-      return { description: "", instructions: ["⛔ STOP: API Key bermasalah."] };
+  // 1. Validasi Kunci
+  if (!API_KEY || API_KEY.length < 10) {
+      return { description: "", instructions: ["⛔ ERROR: API Key belum diisi."] };
   }
 
-  // 2. PERSIAPAN DATA
-  let namaMenu = "Tanpa Nama";
-  let bahan = [];
-  let alat = [];
-  
-  if (typeof inputData === 'string') {
-      namaMenu = inputData;
-  } else if (typeof inputData === 'object') {
-      namaMenu = inputData.namaMenu || inputData.nama || "Tanpa Nama";
-      bahan = inputData.bahan || [];
-      alat = inputData.alat || [];
-  }
+  // 2. Inisialisasi Google SDK
+  const genAI = new GoogleGenerativeAI(API_KEY);
 
-  if (!namaMenu || namaMenu === "Tanpa Nama") {
-      return { description: "", instructions: ["⛔ ERROR: Nama menu kosong."] };
-  }
+  // 3. Persiapan Data
+  let namaMenu = typeof inputData === 'string' ? inputData : (inputData.nama || inputData.namaMenu || "Menu");
+  let bahan = Array.isArray(inputData.bahan) ? inputData.bahan.map((b:any) => b.nama).join(", ") : "";
+  let alat = Array.isArray(inputData.alat) ? inputData.alat.join(", ") : "";
 
-  // Format Text Bahan & Alat
-  let bahanStr = "";
-  if (Array.isArray(bahan)) {
-      bahanStr = bahan.map((b: any) => `${b.nama || ''} ${b.jumlah || ''} ${b.satuan || ''}`).join(", ");
-  }
-  let alatStr = Array.isArray(alat) ? alat.join(", ") : "";
-
-  // Prompt (Instruksi untuk AI)
   const promptText = `
-    Role: Chef Profesional.
+    Kamu adalah Chef Profesional.
     Tugas: Buatkan resep lengkap untuk "${namaMenu}".
+    Bahan tersedia: ${bahan}. Alat: ${alat}.
     
-    Data Tersedia:
-    - Bahan: ${bahanStr || "Bebas/Sesuaikan sendiri"}
-    - Alat: ${alatStr || "Alat dapur standar"}
-    
-    ATURAN OUTPUT (WAJIB JSON):
-    Jangan berikan basa-basi. Keluarkan HANYA JSON valid dengan format ini:
+    OUTPUT WAJIB JSON VALID (Tanpa Markdown):
     {
       "description": "Deskripsi singkat masakan (1-2 kalimat)",
       "ingredients": ["Bahan 1", "Bahan 2"],
       "instructions": ["Langkah 1", "Langkah 2"]
     }
-    Gunakan Bahasa Indonesia.
+    Bahasa Indonesia.
   `;
 
-  try {
-    // ✅ KITA GUNAKAN MODEL TERBAIK DARI LIST ANDA
-    const MODEL_NAME = "gemini-2.5-flash"; 
-    
-    // Gunakan v1beta agar kompatibel
-    const URL = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL_NAME}:generateContent?key=${API_KEY}`;
-    
-    console.log(`🤖 Menghubungi ${MODEL_NAME}...`);
-
-    const response = await fetch(URL, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-            contents: [{ parts: [{ text: promptText }] }],
-            // Kita matikan responseMimeType JSON agar aman, kita parsing manual saja
-            generationConfig: { 
-                temperature: 0.4,
-                maxOutputTokens: 2048
-            } 
-        })
-    });
-
-    if (!response.ok) {
-        const errData = await response.json();
-        console.error("❌ Google API Error:", errData);
-        throw new Error(`Gagal (${response.status}): ${errData.error?.message || 'Unknown Error'}`);
-    }
-
-    const result = await response.json();
-    let text = result.candidates?.[0]?.content?.parts?.[0]?.text;
-    
-    if (!text) throw new Error("AI tidak memberikan jawaban teks.");
-
-    // --- PEMBERSIH JSON (Jaga-jaga AI ngasih Markdown) ---
-    text = text.replace(/```json/g, '').replace(/```/g, '').trim();
-    const firstBrace = text.indexOf('{');
-    const lastBrace = text.lastIndexOf('}');
-    
-    if (firstBrace !== -1 && lastBrace !== -1) {
-        text = text.substring(firstBrace, lastBrace + 1);
-    }
-
-    // Parsing
-    let data;
+  // --- LOGIKA BARU: GUNAKAN MODEL YANG ADA DI LIST JSON ANDA ---
+  // Kita pakai "gemini-flash-latest" karena itu pasti punya kuota gratis.
+  const modelsToTry = [
+      "gemini-flash-latest",    // Target Utama (Biasanya versi 1.5 gratis)
+      "gemini-pro-latest",      // Cadangan 1
+      "gemini-2.0-flash-lite-preview-09-2025" // Cadangan 2 (Versi Lite biasanya boleh)
+  ];
+  
+  for (const modelName of modelsToTry) {
     try {
-        data = JSON.parse(text);
-    } catch (e) {
-        console.warn("⚠️ JSON Rusak, melakukan fallback manual.");
+        console.log(`🤖 Mencoba model: ${modelName}...`);
+        
+        const model = genAI.getGenerativeModel({ model: modelName });
+        const result = await model.generateContent(promptText);
+        const response = await result.response;
+        let text = response.text();
+        
+        if (!text) continue; 
+
+        // Bersihkan JSON
+        text = text.replace(/```json/g, '').replace(/```/g, '').trim();
+        const first = text.indexOf('{');
+        const last = text.lastIndexOf('}');
+        if (first !== -1 && last !== -1) text = text.substring(first, last + 1);
+
+        const data = JSON.parse(text);
+
         return { 
-            description: `Resep ${namaMenu}`, 
-            ingredients: [], 
-            instructions: text.split('\n').filter((l:string) => l.length > 5) 
+            description: data.description || `Resep ${namaMenu}`, 
+            ingredients: data.ingredients || [],
+            instructions: data.instructions || [] 
         };
+
+    } catch (error: any) {
+        console.warn(`❌ Gagal pakai ${modelName}:`, error.message);
+        // Jika errornya kuota (429), kita lanjut ke model berikutnya
     }
-
-    return { 
-        description: data.description || "", 
-        ingredients: data.ingredients || [],
-        instructions: data.instructions || [] 
-    };
-
-  } catch (error: any) {
-    console.error("SERVICE CRASH:", error);
-    return { 
-        description: "", 
-        instructions: [`⚠️ Terjadi Kesalahan: ${error.message}`] 
-    };
   }
+
+  // Jika semua model gagal
+  return { 
+      description: "", 
+      instructions: ["⚠️ Gagal Quota: Tunggu 1 menit lalu coba lagi."] 
+  };
 };
