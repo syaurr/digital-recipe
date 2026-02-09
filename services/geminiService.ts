@@ -1,78 +1,121 @@
-import { GoogleGenerativeAI } from "@google/generative-ai";
+// 🟢 FILE: src/services/geminiService.ts
+const API_KEY = "AIzaSyAb1i8fp-fZ9IYbR1-aljzHJz1cYfcpaRM"; 
+const MODELS = ["gemini-1.5-flash", "gemini-pro"];
 
-// 🟢 KUNCI API ANDA (Biarkan yang ini, karena sudah terbukti VALID)
-const API_KEY = "AIzaSyCJJcgLO33crJS2DNU_3VL7wJglfP1iNIo"; 
+const cleanText = (t: string) => t ? t.replace(/\*\*/g, "").replace(/\*/g, "").replace(/#/g, "").trim() : "";
+const cleanJSON = (t: string) => t.replace(/```json/g, '').replace(/```/g, '').trim();
 
-export const generateRecipeSteps = async (inputData: any) => {
-  // 1. Validasi Kunci
-  if (!API_KEY || API_KEY.length < 10) {
-      return { description: "", instructions: ["⛔ ERROR: API Key belum diisi."] };
-  }
-
-  // 2. Inisialisasi Google SDK
-  const genAI = new GoogleGenerativeAI(API_KEY);
-
-  // 3. Persiapan Data
-  let namaMenu = typeof inputData === 'string' ? inputData : (inputData.nama || inputData.namaMenu || "Menu");
-  let bahan = Array.isArray(inputData.bahan) ? inputData.bahan.map((b:any) => b.nama).join(", ") : "";
-  let alat = Array.isArray(inputData.alat) ? inputData.alat.join(", ") : "";
-
-  const promptText = `
-    Kamu adalah Chef Profesional.
-    Tugas: Buatkan resep lengkap untuk "${namaMenu}".
-    Bahan tersedia: ${bahan}. Alat: ${alat}.
-    
-    OUTPUT WAJIB JSON VALID (Tanpa Markdown):
-    {
-      "description": "Deskripsi singkat masakan (1-2 kalimat)",
-      "ingredients": ["Bahan 1", "Bahan 2"],
-      "instructions": ["Langkah 1", "Langkah 2"]
+// Fungsi ini PENTING: Mengubah object {nama, jumlah, satuan} jadi teks lengkap
+// Contoh: "3 sdm Bubuk Taro"
+const formatListToString = (list: any[]) => {
+  if (!Array.isArray(list) || list.length === 0) return "Sesuai kebutuhan";
+  return list.map(item => {
+    if (typeof item === 'object') {
+      return `${item.jumlah || ''} ${item.satuan || ''} ${item.nama}`.trim();
     }
-    Bahasa Indonesia.
-  `;
+    return String(item);
+  }).join(', ');
+};
 
-  // --- LOGIKA BARU: GUNAKAN MODEL YANG ADA DI LIST JSON ANDA ---
-  // Kita pakai "gemini-flash-latest" karena itu pasti punya kuota gratis.
-  const modelsToTry = [
-      "gemini-flash-latest",    // Target Utama (Biasanya versi 1.5 gratis)
-      "gemini-pro-latest",      // Cadangan 1
-      "gemini-2.0-flash-lite-preview-09-2025" // Cadangan 2 (Versi Lite biasanya boleh)
-  ];
-  
-  for (const modelName of modelsToTry) {
-    try {
-        console.log(`🤖 Mencoba model: ${modelName}...`);
-        
-        const model = genAI.getGenerativeModel({ model: modelName });
-        const result = await model.generateContent(promptText);
-        const response = await result.response;
-        let text = response.text();
-        
-        if (!text) continue; 
+const bikinResepDarurat = (nama: string, deskripsi: string, bahan: string, alat: string) => {
+  const finalDesc = (deskripsi && deskripsi.length > 20 && !deskripsi.includes("Error")) 
+    ? deskripsi 
+    : `Nikmati kelezatan ${nama} khas Balista.`;
 
-        // Bersihkan JSON
-        text = text.replace(/```json/g, '').replace(/```/g, '').trim();
-        const first = text.indexOf('{');
-        const last = text.lastIndexOf('}');
-        if (first !== -1 && last !== -1) text = text.substring(first, last + 1);
-
-        const data = JSON.parse(text);
-
-        return { 
-            description: data.description || `Resep ${namaMenu}`, 
-            ingredients: data.ingredients || [],
-            instructions: data.instructions || [] 
-        };
-
-    } catch (error: any) {
-        console.warn(`❌ Gagal pakai ${modelName}:`, error.message);
-        // Jika errornya kuota (429), kita lanjut ke model berikutnya
-    }
-  }
-
-  // Jika semua model gagal
-  return { 
-      description: "", 
-      instructions: ["⚠️ Gagal Quota: Tunggu 1 menit lalu coba lagi."] 
+  return {
+    desc: finalDesc,
+    steps: [
+      `Siapkan alat ${alat} di meja kerja yang bersih.`,
+      `Siapkan bahan-bahan berikut: ${bahan}.`,
+      `Racik dan olah bahan dengan hati-hati hingga matang/tercampur rata.`,
+      `Sajikan ${nama} segera.`
+    ]
   };
 };
+
+export const generateRecipeDetails = async (input: any) => {
+  const { nama = "Menu", deskripsi = "", bahan = [], alat = [] } = input;
+  
+  // Ubah data array jadi string panjang biar bisa dibaca AI
+  const strBahan = formatListToString(bahan);
+  const strAlat = formatListToString(alat);
+  const isCsvDesc = deskripsi && deskripsi.length > 20 && !deskripsi.includes("Error");
+
+  if (!API_KEY) {
+    const d = bikinResepDarurat(nama, deskripsi, strBahan, strAlat);
+    return { description: d.desc, steps: d.steps, ingredients: bahan, tools: alat };
+  }
+
+  // 🔥 PROMPT KHUSUS: MEMAKSA DETAIL 🔥
+  const prompt = `
+    Kamu adalah Head Chef yang sangat teliti dalam menulis SOP (Standar Operasional Prosedur).
+    Tugas: Tulis langkah pembuatan DETIL untuk menu "${nama}".
+
+    DATA BAHAN (Gunakan ANGKA & SATUAN ini dalam kalimat langkah):
+    ${strBahan}
+
+    DATA ALAT (Sebutkan alat ini saat dipakai):
+    ${strAlat}
+
+    ATURAN PENULISAN LANGKAH (WAJIB DIPATUHI):
+    1.  **DILARANG** menulis kalimat umum seperti "Siapkan bahan sesuai kebutuhan".
+    2.  **WAJIB** menyebutkan **JUMLAH** dan **NAMA BAHAN** di dalam kalimat langkah.
+        * ❌ Salah: "Masukkan gula dan teh."
+        * ✅ Benar: "Tuang **30 ml Gula Cair** dan **150 ml Black Tea** ke dalam wadah."
+    3.  **WAJIB** menyebutkan **ALAT** yang digunakan.
+        * ❌ Salah: "Aduk rata."
+        * ✅ Benar: "Kocok menggunakan **Shaker** hingga tercampur rata."
+    4.  **URUTAN LOGIS:**
+        * Jika Minuman (Tea/Milk): Seduh/Tuang Cairan -> Masukkan Bubuk/Gula -> Aduk/Shake -> Masukkan Es Batu -> Sajikan.
+        * Jika Makanan: Siapkan Adonan -> Panaskan Alat (Teflon/Panci) -> Masak hingga matang -> Beri Topping.
+    5.  **JANGAN HALUSINASI:** Jangan suruh pakai "Oven" kalau alatnya cuma "Kompor". Jangan suruh "Garnish Daun Mint" kalau bahannya tidak ada.
+
+    FORMAT OUTPUT JSON:
+    {
+      "desc": "Deskripsi singkat 1 kalimat yang menggugah selera.",
+      "step": [
+        "1. [Persiapan] Siapkan (Sebutkan Alat) dan pastikan bersih...",
+        "2. [Proses] Masukkan (Sebutkan Jumlah + Nama Bahan) ke dalam (Alat)...",
+        "3. [Proses] Tambahkan (Sebutkan Jumlah + Nama Bahan lain)...",
+        "4. [Teknik] Lakukan (Aduk/Shake/Masak) selama beberapa saat...",
+        "5. [Penyajian] Tuang ke (Alat Saji) dan sajikan..."
+      ]
+    }
+  `;
+
+  for (const model of MODELS) {
+    try {
+      const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${API_KEY}`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
+      });
+      
+      if (!res.ok) continue;
+
+      const data = await res.json();
+      const text = cleanJSON(data.candidates?.[0]?.content?.parts?.[0]?.text || "");
+      const start = text.indexOf('{'), end = text.lastIndexOf('}');
+
+      if (start !== -1 && end !== -1) {
+        const result = JSON.parse(text.substring(start, end + 1));
+        
+        const finalDescription = isCsvDesc ? deskripsi : cleanText(result.desc || result.description);
+
+        return {
+          description: finalDescription,
+          steps: (result.step || result.steps || []).map((s:any) => cleanText(String(s))),
+          ingredients: bahan, 
+          tools: alat         
+        };
+      }
+    } catch (e) {
+      console.warn("AI Error, coba model lain...", e);
+    }
+  }
+
+  const fail = bikinResepDarurat(nama, deskripsi, strBahan, strAlat);
+  return { description: fail.desc, steps: fail.steps, ingredients: bahan, tools: alat };
+};
+
+// Alias untuk Admin
+export const generateRecipeSteps = generateRecipeDetails;

@@ -1,175 +1,201 @@
+// 🟢 FILE: src/pages/RecipeDetail.tsx
 import React, { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
+import toast from 'react-hot-toast';
 import { supabase } from '../services/supabaseClient';
 import Layout from '../components/Layout';
-import { getSupabaseErrorMessage } from '../services/errorUtils';
 import { getGoogleDriveImageUrl } from '../utils/imageUtils';
+import { generateRecipeDetails } from '../services/geminiService';
 
-// --- FUNGSI PEMBERSIH DATA (VERSI UPGRADE) ---
-const parseDataCerdas = (data: any) => {
-  if (!data) return [];
-
-  // 1. Jika sudah Array, kembalikan langsung
-  if (Array.isArray(data)) return data;
-
-  // 2. Jika String (Tulisan)
-  if (typeof data === 'string') {
-    let text = data.trim();
-
-    // Cek JSON lama (diawali kurung siku [ )
-    if (text.startsWith('[')) {
-      try { return JSON.parse(text); } catch (e) { console.error(e); }
+// Fungsi Parsing Data (Penting agar data tidak error)
+const parse = (d: any) => {
+  if (!d) return [];
+  if (Array.isArray(d)) return d;
+  if (typeof d === 'string') {
+    if (d.includes(';')) {
+      return d.split(';').map(i => {
+        const c = i.trim();
+        // Cek format Pipa: Nama|Jumlah|Satuan
+        if (c.includes('|')) {
+          const p = c.split('|');
+          return { nama: p[0], jumlah: p[1], satuan: p[2] };
+        }
+        return c;
+      });
     }
-
-    // Cek Postgres Array (diawali kurung kurawal { )
-    if (text.startsWith('{') && text.endsWith('}')) {
-       text = text.slice(1, -1); // Buang kurung kurawal
-    }
-
-    // --- LOGIKA BARU UNTUK FORMAT "Adonan|1|porsi;Kani|2|pcs" ---
-    if (text.includes(';')) {
-        return text.split(';').map((item) => {
-            const cleanItem = item.trim();
-            // Jika ada garis tegak |, pisahkan jadi format cantik
-            if (cleanItem.includes('|')) {
-                const parts = cleanItem.split('|');
-                // Format: "Nama | Jumlah | Satuan" -> Menjadi object biar rapi
-                return {
-                    nama: parts[0]?.trim(),
-                    jumlah: parts[1]?.trim(),
-                    satuan: parts[2]?.trim()
-                };
-            }
-            return cleanItem;
-        });
-    }
-
-    // Fallback: Pisah dengan koma jika tidak ada titik koma
-    if (text.includes(',')) {
-        return text.split(',').map((item) => item.trim());
-    }
-
-    return [text];
+    if (d.includes(',')) return d.split(',');
+    return [d];
   }
-
   return [];
 };
 
 const RecipeDetail = () => {
   const { id } = useParams<{ id: string }>();
-  const [recipe, setRecipe] = useState<any | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [r, setR] = useState<any>(null);
+  const [loading, setL] = useState(true);
+  const [gen, setG] = useState(false);
 
   useEffect(() => {
-    const fetchRecipe = async () => {
+    const fetch = async () => {
       if (!id) return;
-      setLoading(true);
-      const { data, error } = await supabase
-        .from('resep')
-        .select(`*, kategori (nama)`)
-        .eq('id', id)
-        .single();
-
-      if (error) {
-        setError(getSupabaseErrorMessage(error, 'Resep tidak ditemukan.'));
-      } else {
-        setRecipe(data);
-      }
-      setLoading(false);
+      const { data } = await supabase.from('resep').select(`*, kategori(nama)`).eq('id', id).single();
+      setR(data);
+      setL(false);
     };
-
-    fetchRecipe();
+    fetch();
   }, [id]);
 
-  if (loading) return <Layout title="Detail Resep"><div className="text-center p-8">Memuat...</div></Layout>;
-  if (error || !recipe) return <Layout title="Error"><div className="text-center text-red-500 p-4">Error: {error}</div></Layout>;
+  const handleAI = async () => {
+    if (!r) return;
+    setG(true);
+    const toastId = toast.loading("Chef AI sedang bekerja...");
+    try {
+      const res = await generateRecipeDetails({ nama: r.nama, deskripsi: r.deskripsi, bahan: r.bahan, alat: r.alat });
+      
+      setR((prev: any) => ({ ...prev, deskripsi: res.description, langkah: res.steps }));
+      await supabase.from('resep').update({ deskripsi: res.description, langkah: res.steps, status_data: 'Lengkap' }).eq('id', id);
+      
+      toast.success("Resep Berhasil Dibuat!", { id: toastId });
+    } catch (e) { toast.error("Gagal memproses", { id: toastId }); }
+    setG(false);
+  };
 
-  // Parsing data
-  const listBahan = parseDataCerdas(recipe.bahan);
-  const listAlat = parseDataCerdas(recipe.alat);
-  const listLangkah = parseDataCerdas(recipe.langkah);
+  if (loading || !r) return <Layout title="Memuat..."><div className="p-20 text-center">Sedang mengambil data resep...</div></Layout>;
+
+  // Data Siap Tampil
+  const bahan = parse(r.bahan);
+  const alat = parse(r.alat);
+  const langkah = parse(r.langkah);
 
   return (
-    <Layout title={recipe.nama}>
-      <div className="bg-white dark:bg-gray-800 shadow-xl rounded-lg overflow-hidden">
-        <img
-          src={getGoogleDriveImageUrl(recipe.foto_url) || `https://picsum.photos/800/400?random=${recipe.id}`}
-          alt={recipe.nama}
-          className="w-full h-64 md:h-96 object-cover"
-        />
-        <div className="p-6 md:p-8">
-          <p className="text-sm text-green-600 font-bold uppercase mb-1">{recipe.kategori?.nama || 'Umum'}</p>
-          <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-4">{recipe.nama}</h1>
-          <p className="text-gray-600 dark:text-gray-300 mb-6 text-lg">{recipe.deskripsi}</p>
+    <Layout title={r.nama}>
+      <div className="bg-white rounded-xl shadow-lg overflow-hidden max-w-6xl mx-auto border border-gray-100">
+        
+        {/* === 1. GAMBAR HEADER === */}
+        <div className="h-64 md:h-96 w-full bg-gray-200 relative">
+           <img 
+             src={getGoogleDriveImageUrl(r.foto_url)} 
+             className="w-full h-full object-cover" 
+             alt={r.nama}
+           />
+           <div className="absolute top-4 left-4">
+             <Link to="/" className="bg-white/80 backdrop-blur-sm text-gray-800 px-4 py-2 rounded-full font-bold hover:bg-white transition-all shadow-sm">
+                ← Kembali
+             </Link>
+           </div>
+        </div>
 
-          {recipe.potongan && (
-            <div className="mb-8 p-4 bg-yellow-50 rounded-lg border border-yellow-200">
-                <p className="text-lg font-bold text-yellow-800">🥡 Penyajian: <span className="font-normal">{recipe.potongan}</span></p>
-            </div>
-          )}
-          
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-8">
-            {/* --- BAGIAN BAHAN --- */}
-            <div>
-              <h3 className="text-xl font-bold mb-4 border-b-2 border-green-500 pb-2">Bahan-bahan</h3>
-              <ul className="list-disc list-inside space-y-2 text-gray-700 dark:text-gray-200">
-                {listBahan.length > 0 ? listBahan.map((item: any, index: number) => {
-                    // Logika Tampilan: 
-                    // 1. Jika Object hasil pecahan '|' (Format baru: {nama, jumlah, satuan})
-                    if (item.nama && item.jumlah) {
-                        return <li key={index}><b>{item.jumlah} {item.satuan}</b> {item.nama}</li>;
-                    }
-                    // 2. Jika Object JSON lama ({nama: "..."})
-                    if (item.nama) {
-                         return <li key={index}><b>{item.jumlah || ''} {item.satuan || ''}</b> {item.nama}</li>;
-                    }
-                    // 3. Jika Teks biasa
-                    return <li key={index}>{item}</li>;
-                }) : <p className="italic text-gray-500">Data bahan belum tersedia.</p>}
-              </ul>
-            </div>
-
-            {/* --- BAGIAN ALAT --- */}
-            <div>
-              <h3 className="text-xl font-bold mb-4 border-b-2 border-green-500 pb-2">Alat</h3>
-              <ul className="list-disc list-inside space-y-2 text-gray-700 dark:text-gray-200">
-                 {listAlat.length > 0 ? listAlat.map((item: any, index: number) => (
-                    <li key={index}>{typeof item === 'object' ? item.nama : item}</li>
-                 )) : <p className="italic text-gray-500">Data alat belum tersedia.</p>}
-              </ul>
-            </div>
-          </div>
-          
-          {/* --- BAGIAN LANGKAH (ERROR HANDLING) --- */}
-          <div className="mt-8">
-            <h3 className="text-xl font-bold mb-4 border-b-2 border-green-500 pb-2">Langkah-langkah</h3>
-            {/* Cek apakah ada error API Key di dalam teks langkah */}
-            {typeof recipe.langkah === 'string' && recipe.langkah.includes('API key was reported as leaked') ? (
-                <div className="p-4 bg-red-50 border border-red-200 rounded-lg text-red-700">
-                    <p className="font-bold">⚠️ Gagal Memuat Langkah (Masalah API Key)</p>
-                    <p className="text-sm mt-1">
-                       API Key Google Gemini Anda telah diblokir karena terdeteksi bocor. 
-                       Mohon buat API Key baru dan masukkan ke file <code>.env</code>.
-                    </p>
+        <div className="p-8 md:p-12">
+           
+           {/* === 2. JUDUL & DESKRIPSI === */}
+           <div className="mb-8 border-b border-gray-100 pb-8">
+              <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-4">
+                <div>
+                  <span className="text-green-600 font-bold uppercase tracking-wider text-sm mb-1 block">
+                    {r.kategori?.nama || "Kategori Umum"}
+                  </span>
+                  <h1 className="text-4xl font-extrabold text-gray-900">{r.nama}</h1>
                 </div>
-            ) : listLangkah.length > 0 ? (
-                <ol className="list-decimal list-inside space-y-3 text-gray-700 dark:text-gray-200">
-                    {listLangkah.map((step: any, index: number) => (
-                        <li key={index}>{typeof step === 'object' ? JSON.stringify(step) : step}</li>
-                    ))}
-                </ol>
-            ) : (
-                <p className="text-gray-500 italic">Langkah-langkah belum tersedia.</p>
-            )}
-          </div>
+                
+                {/* TOMBOL AI (KEMBALI SEPERTI AWAL: TOMBOL UNGU JELAS) */}
+                <button 
+                  onClick={handleAI} 
+                  disabled={gen} 
+                  className={`px-6 py-2.5 rounded-lg font-bold text-white shadow-md transition-all flex items-center gap-2 ${
+                    gen ? "bg-gray-400 cursor-not-allowed" : "bg-purple-600 hover:bg-purple-700 hover:-translate-y-0.5"
+                  }`}
+                >
+                   {gen ? "⏳ Memproses..." : "✨ Buat Resep AI"}
+                </button>
+              </div>
+
+              <p className="text-gray-600 text-lg italic leading-relaxed bg-gray-50 p-4 rounded-lg border-l-4 border-green-500">
+                "{r.deskripsi || "Deskripsi belum tersedia."}"
+              </p>
+           </div>
+
+           {/* === 3. INFO PORSI (KOTAK KUNING) === */}
+           {r.porsi && (
+             <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-10 flex items-center gap-3 text-yellow-800 font-medium shadow-sm">
+                <span className="text-xl">🍛</span> 
+                <span>Penyajian: <b>{r.porsi}</b></span>
+             </div>
+           )}
+
+           {/* === 4. GRID: BAHAN (Kiri) & ALAT (Kanan) === */}
+           <div className="grid md:grid-cols-2 gap-12 mb-12">
+             
+             {/* KOLOM KIRI: BAHAN */}
+             <div>
+               <h3 className="font-bold text-2xl text-gray-800 border-b-2 border-green-500 pb-2 mb-6 flex items-center gap-2">
+                 🥦 Bahan-bahan
+               </h3>
+               {bahan.length > 0 ? (
+                 <ul className="space-y-3">
+                   {bahan.map((b: any, i: number) => (
+                     <li key={i} className="flex items-start gap-3 text-gray-700 bg-gray-50 p-3 rounded-lg">
+                       <span className="mt-1.5 w-2 h-2 bg-green-500 rounded-full flex-shrink-0"></span>
+                       {typeof b === 'object' ? (
+                          <span><b>{b.jumlah} {b.satuan}</b> {b.nama}</span>
+                       ) : (
+                          <span>{b}</span>
+                       )}
+                     </li>
+                   ))}
+                 </ul>
+               ) : <p className="text-gray-400 italic">Data bahan kosong.</p>}
+             </div>
+
+             {/* KOLOM KANAN: ALAT */}
+             <div>
+               <h3 className="font-bold text-2xl text-gray-800 border-b-2 border-blue-500 pb-2 mb-6 flex items-center gap-2">
+                 🛠️ Alat Masak
+               </h3>
+               {alat.length > 0 ? (
+                 <ul className="space-y-3">
+                   {alat.map((a: any, i: number) => (
+                     <li key={i} className="flex items-start gap-3 text-gray-700 bg-blue-50 p-3 rounded-lg">
+                       <span className="mt-1.5 w-2 h-2 bg-blue-500 rounded-full flex-shrink-0"></span>
+                       <span>{typeof a === 'object' ? a.nama : a}</span>
+                     </li>
+                   ))}
+                 </ul>
+               ) : <p className="text-gray-400 italic">Data alat belum diisi.</p>}
+             </div>
+
+           </div>
+
+           {/* === 5. LANGKAH PEMBUATAN (FULL BAWAH) === */}
+           <div>
+             <h3 className="font-bold text-2xl text-gray-800 border-b-2 border-gray-300 pb-2 mb-6 flex items-center gap-2">
+               📝 Langkah-langkah
+             </h3>
+             {langkah.length > 0 ? (
+               <div className="space-y-4">
+                 {langkah.map((l: any, i: number) => (
+                   <div key={i} className="flex gap-4 group">
+                     <div className="flex-shrink-0 w-8 h-8 bg-gray-800 text-white font-bold rounded-full flex items-center justify-center shadow-sm group-hover:bg-green-600 transition-colors">
+                       {i + 1}
+                     </div>
+                     <p className="text-gray-700 text-lg leading-relaxed pt-0.5 border-b border-gray-100 pb-4 w-full">
+                       {typeof l === 'object' ? JSON.stringify(l) : l}
+                     </p>
+                   </div>
+                 ))}
+               </div>
+             ) : (
+               <div className="p-8 bg-gray-50 border-2 border-dashed border-gray-300 rounded-xl text-center">
+                 <p className="text-gray-500 mb-2">Langkah belum tersedia.</p>
+                 <p className="text-sm text-purple-600 font-bold">Klik tombol "Buat Resep AI" di atas.</p>
+               </div>
+             )}
+           </div>
 
         </div>
       </div>
       
-      <div className="mt-8 text-center pb-8">
-          <Link to="/" className="text-green-600 hover:underline text-lg">&larr; Kembali ke Daftar Menu</Link>
-      </div>
+      {/* Spacer Bawah */}
+      <div className="h-20"></div>
     </Layout>
   );
 };
