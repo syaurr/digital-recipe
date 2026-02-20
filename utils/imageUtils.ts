@@ -1,23 +1,34 @@
-/**
- * Converts a Google Drive file URL into a direct, embeddable image URL.
- * If the URL is not a recognized Google Drive link, it returns the original URL.
- * @param url The Google Drive URL (e.g., "https://drive.google.com/file/d/FILE_ID/view?usp=sharing").
- * @returns A direct image link or the original URL.
- */
+// 🟢 FILE: src/utils/imageUtils.ts
+
 export const getGoogleDriveImageUrl = (url: string | null | undefined): string => {
-    if (!url) {
-        return '';
-    }
-    
-    // Regex to capture the file ID from various Google Drive URL formats
-    const regex = /drive\.google\.com\/(?:file\/d\/|open\?id=)([a-zA-Z0-9_-]+)/;
-    const match = url.match(regex);
+  // 1. Cek jika data kosong, NULL, atau bertuliskan "EMPTY"
+  if (!url || url === "NULL" || url === "EMPTY" || url.trim() === "") {
+    return ""; // Akan mentrigger onError di Home.tsx
+  }
 
-    if (match && match[1]) {
-        const fileId = match[1];
-        return `https://drive.google.com/uc?export=view&id=${fileId}`;
-    }
+  const cleanUrl = url.trim();
 
-    // Return the original URL if it's not a Google Drive link
-    return url;
+  // 2. Jika link sudah berupa format 'lh3.googleusercontent' (Direct Link)
+  // Biasanya ini link hasil copy-paste langsung dari inspect element Google
+  if (cleanUrl.includes("googleusercontent.com")) {
+    // Kita coba ambil ID-nya saja biar seragam pakai thumbnail endpoint
+    const idMatch = cleanUrl.match(/\/d\/([^/]+)/);
+    if (idMatch && idMatch[1]) {
+       return `https://drive.google.com/thumbnail?id=${idMatch[1]}&sz=w1000`;
+    }
+    // Jika tidak ketemu ID-nya, kembalikan link aslinya (mungkin masih bisa jalan)
+    return cleanUrl;
+  }
+
+  // 3. Regex Standar Google Drive (id=..., /d/..., open?id=...)
+  const regex = /(?:id=|\/d\/|open\?id=)([\w-]+)/;
+  const match = cleanUrl.match(regex);
+
+  if (match && match[1]) {
+    const fileId = match[1];
+    return `https://drive.google.com/thumbnail?id=${fileId}&sz=w1000`;
+  }
+
+  // 4. Jika bukan link Google Drive sama sekali (misal link website lain)
+  return cleanUrl;
 };
