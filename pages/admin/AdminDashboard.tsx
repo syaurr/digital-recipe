@@ -6,7 +6,6 @@ import type { Resep } from '../../types';
 import Layout from '../../components/Layout';
 import toast from 'react-hot-toast';
 
-// Fungsi jeda pembantu
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
 const AdminDashboard = () => {
@@ -29,9 +28,7 @@ const AdminDashboard = () => {
 
   const handleBulkGenerate = async () => {
     if (selectedIds.size === 0) return;
-    
-    // Konfirmasi dengan peringatan kuota
-    if (!window.confirm(`Generate detail untuk ${selectedIds.size} menu?\n\nCatatan: Proses ini akan memakan waktu karena AI membutuhkan jeda 13 detik per menu agar tidak terkena limit kuota Google.`)) return;
+    if (!window.confirm(`Generate detail untuk ${selectedIds.size} menu?`)) return;
 
     setIsBulkProcessing(true);
     const idsToProcess = Array.from(selectedIds);
@@ -41,36 +38,25 @@ const AdminDashboard = () => {
       const id = idsToProcess[i];
       try {
         const { data: recipe } = await supabase.from('resep').select('*').eq('id', id).single();
-        
         if (recipe) {
-          // Update status di layar
-          setBulkProgress(`👨‍🍳 [${i + 1}/${idsToProcess.length}] Menyusun: ${recipe.nama}...`);
+          setBulkProgress(`👨‍🍳 [${i+1}/${idsToProcess.length}] Menyusun: ${recipe.nama}...`);
           
           const res = await generateRecipeSteps({ 
-            nama: recipe.nama, 
-            bahan: recipe.bahan, 
-            alat: recipe.alat, 
-            deskripsi: recipe.deskripsi 
+            nama: recipe.nama, bahan: recipe.bahan, alat: recipe.alat 
           });
           
           await supabase.from('resep').update({ 
             langkah: res.steps, 
-            deskripsi: recipe.deskripsi || res.description 
+            deskripsi: res.description 
           }).eq('id', id);
           
           successCount++;
-
-          // 🛑 JEDA KRUSIAL: 13 Detik (13000ms) agar tidak kena limit 5 req/menit
-          if (i < idsToProcess.length - 1) {
-            setBulkProgress(`⏳ Menunggu jeda kuota (13 detik)...`);
-            await delay(13000); 
-          }
+          // Jeda agar tidak kena limit 5 req/menit
+          if (i < idsToProcess.length - 1) await delay(13000); 
         }
       } catch (e: any) { 
-        console.error("Error pada menu:", id, e);
-        toast.error(`Gagal memproses ${id}. Melanjutkan ke menu berikutnya...`);
-        // Tetap beri jeda jika error karena kuota habis
-        await delay(15000);
+        console.error(e);
+        if (e.message?.includes("quota")) toast.error("Kuota penuh, menunggu...");
       }
     }
 
@@ -86,7 +72,7 @@ const AdminDashboard = () => {
         <div className="fixed inset-0 bg-black/80 z-50 flex flex-col justify-center items-center text-white p-6 text-center">
           <div className="animate-spin rounded-full h-16 w-16 border-t-4 border-purple-500 mb-4"></div>
           <h2 className="text-xl font-bold">{bulkProgress}</h2>
-          <p className="text-sm text-gray-400 mt-2">AI sedang bekerja. Jangan tutup halaman ini agar kuota tetap stabil.</p>
+          <p className="text-sm text-gray-400 mt-2">Jangan tutup halaman ini agar AI tidak macet.</p>
         </div>
       )}
       
@@ -102,7 +88,7 @@ const AdminDashboard = () => {
               </button>
             )}
          </div>
-         <Link to="/admin/resep/tambah" className="bg-balista-secondary text-white px-4 py-2 rounded-lg font-bold">+ Tambah</Link>
+         <Link to="/admin/resep/tambah" className="bg-balista-secondary text-white px-4 py-2 rounded-lg font-bold">+ Tambah Menu</Link>
       </div>
 
       <div className="bg-white rounded-xl shadow-md overflow-hidden">
@@ -115,19 +101,14 @@ const AdminDashboard = () => {
                   onChange={(e) => setSelectedIds(e.target.checked ? new Set(recipes.map(r => r.id)) : new Set())} 
                 />
               </th>
-              <th className="p-4 font-bold text-sm uppercase">Menu</th>
-              <th className="p-4 font-bold text-sm uppercase">Status AI</th>
-              <th className="p-4 text-right font-bold text-sm uppercase">Aksi</th>
+              <th className="p-4 font-bold text-sm uppercase text-gray-600">Menu</th>
+              <th className="p-4 font-bold text-sm uppercase text-gray-600">Status</th>
+              <th className="p-4 text-right font-bold text-sm uppercase text-gray-600">Aksi</th>
             </tr>
           </thead>
           <tbody>
             {recipes.map(r => {
-              // Cek apakah langkah valid dan bukan pesan error
-              const isComplete = Array.isArray(r.langkah) && 
-                               r.langkah.length > 0 && 
-                               !JSON.stringify(r.langkah).includes("quota") &&
-                               !JSON.stringify(r.langkah).includes("403");
-
+              const isComplete = Array.isArray(r.langkah) && r.langkah.length > 0;
               return (
                 <tr key={r.id} className="border-b hover:bg-gray-50 transition-colors">
                   <td className="p-4">
@@ -136,12 +117,13 @@ const AdminDashboard = () => {
                       checked={selectedIds.has(r.id)} 
                       onChange={() => {
                         const next = new Set(selectedIds);
-                        next.has(r.id) ? next.delete(r.id) : next.add(r.id);
+                        if (next.has(r.id)) next.delete(r.id);
+                        else next.add(r.id);
                         setSelectedIds(next);
                       }} 
                     />
                   </td>
-                  <td className="p-4 font-medium">{r.nama}</td>
+                  <td className="p-4 font-medium text-gray-800">{r.nama}</td>
                   <td className="p-4">
                     {isComplete ? 
                       <span className="bg-green-100 text-green-700 px-3 py-1 rounded-full text-xs font-bold">Lengkap ✅</span> : 
@@ -149,7 +131,7 @@ const AdminDashboard = () => {
                     }
                   </td>
                   <td className="p-4 text-right">
-                    <button onClick={() => navigate(`/admin/resep/edit/${r.id}`)} className="text-blue-600 font-bold mr-4">Edit</button>
+                    <button onClick={() => navigate(`/admin/resep/edit/${r.id}`)} className="text-blue-600 font-bold hover:underline">Edit</button>
                   </td>
                 </tr>
               );
