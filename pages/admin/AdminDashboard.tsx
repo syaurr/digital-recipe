@@ -181,13 +181,13 @@ const AdminDashboard = () => {
 
   return (
     <Layout title="Admin Dashboard">
-      <div className="p-4 md:p-8 text-left bg-[#fdf8f0] min-h-screen relative">
+      <div className="p-4 md:p-8 text-left bg-transparent min-h-screen relative">
         
         {/* HEADER */}
         <div className="flex flex-col md:flex-row justify-between items-center mb-6 md:mb-8 bg-white p-6 md:p-10 rounded-[25px] md:rounded-[35px] shadow-sm border border-gray-100 text-center md:text-left">
           <div className="mb-4 md:mb-0">
             <h2 className="font-black text-2xl md:text-4xl uppercase tracking-tighter text-gray-800 italic">Manajemen SOP</h2>
-            <p className="text-[10px] md:text-sm font-bold text-gray-400 uppercase tracking-widest mt-1">Sistem Input Head Chef</p>
+            <p className="text-[10px] md:text-sm font-bold text-gray-400 uppercase tracking-widest mt-1">Sistem Input Resep</p>
           </div>
           <button onClick={() => { 
             setEditingRecipe(null); 
@@ -384,7 +384,7 @@ const AdminDashboard = () => {
                 
                 {/* Status SOP */}
                 <div className="col-span-1 md:col-span-2 bg-[#fdf8f0] p-5 md:p-8 rounded-[20px] md:rounded-[30px] border border-orange-100 shadow-inner">
-                  <label className="text-[10px] md:text-xs font-black uppercase text-[#d35400] mb-3 md:mb-4 block tracking-widest italic">Verifikasi Head Chef: Status SOP</label>
+                  <label className="text-[10px] md:text-xs font-black uppercase text-[#d35400] mb-3 md:mb-4 block tracking-widest italic">Verifikasi: Status SOP</label>
                   <div className="flex flex-col sm:flex-row gap-4 sm:gap-8 mb-3 md:mb-4">
                     <label className="flex items-center gap-3 cursor-pointer group">
                       <input type="radio" name="status_sop" value="Lengkap" checked={formData.status_sop === 'Lengkap'} onChange={(e) => setFormData({...formData, status_sop: e.target.value})} className="w-5 h-5 md:w-6 md:h-6 accent-green-600" />
