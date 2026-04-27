@@ -11,12 +11,15 @@ const AdminDashboard = () => {
   const [recipeToDelete, setRecipeToDelete] = useState<any>(null);
   const [editingRecipe, setEditingRecipe] = useState<any | null>(null);
 
+  // STATE BARU: Tambahan status_sop & alasan_belum_lengkap
   const [formData, setFormData] = useState({
     nama: '', kategori_id: '', foto_url: '', deskripsi: '', 
     bahan: [{ nama: '', jumlah: '', satuan: '' }], 
     alat: '', 
     langkah: [''], 
-    potongan: ''
+    potongan: '',
+    status_sop: 'Lengkap',
+    alasan_belum_lengkap: ''
   });
 
   useEffect(() => { 
@@ -37,16 +40,19 @@ const AdminDashboard = () => {
       return bahanData.length > 0 ? bahanData.map(b => ({
         nama: b.nama || '',
         jumlah: String(b.jumlah || ''),
-        satuan: b.satuan || ''
+        satuan: (b.satuan || '').toLowerCase()
       })) : [{ nama: '', jumlah: '', satuan: '' }];
     }
     if (typeof bahanData === 'string') {
       const parsed = bahanData.split(/[;\n]/).map(item => {
         if (item.includes('|')) {
-          const parts = item.split('|');
-          const takaran = parts[1] ? parts[1].trim() : '';
-          const match = takaran.match(/(\d+)\s*(.*)/);
-          return { nama: parts[0].trim(), jumlah: match ? match[1] : takaran, satuan: match ? match[2].toLowerCase() : '' };
+          const parts = item.split('|').map(p => p.trim());
+          if (parts.length >= 3) {
+            return { nama: parts[0], jumlah: parts[1], satuan: parts[2].toLowerCase() };
+          }
+          const takaran = parts[1] || '';
+          const match = takaran.match(/(\d+(?:\.\d+)?)\s*(.*)/);
+          return { nama: parts[0], jumlah: match ? match[1] : takaran, satuan: match ? match[2].toLowerCase() : '' };
         }
         return { nama: item.trim(), jumlah: '', satuan: '' };
       }).filter(b => b.nama !== '');
@@ -85,6 +91,12 @@ const AdminDashboard = () => {
       return;
     }
 
+    // Validasi alasan wajib isi jika status "Belum"
+    if (formData.status_sop === 'Belum' && !formData.alasan_belum_lengkap.trim()) {
+      toast.error("Silakan isi alasan kenapa SOP ini belum lengkap!");
+      return;
+    }
+
     const tid = toast.loading("Menyimpan Menu...");
     
     try {
@@ -101,9 +113,11 @@ const AdminDashboard = () => {
             jumlah: parseFloat(b.jumlah) || null,
             satuan: b.satuan.trim()
           })),
-        // PERBAIKAN FATAL: Memastikan alat dikirim sebagai Array of Strings!
         alat: formData.alat.split('\n').map(a => a.trim()).filter(a => a !== ""),
-        langkah: formData.langkah.map(l => l.trim()).filter(l => l !== "")
+        langkah: formData.langkah.map(l => l.trim()).filter(l => l !== ""),
+        // Menambahkan status dan alasan ke database
+        status_sop: formData.status_sop,
+        alasan_belum_lengkap: formData.status_sop === 'Belum' ? formData.alasan_belum_lengkap : null
       };
 
       if (editingRecipe) {
@@ -161,7 +175,7 @@ const AdminDashboard = () => {
           <div className="flex gap-4">
             <button onClick={() => { 
               setEditingRecipe(null); 
-              setFormData({nama:'', kategori_id:'', foto_url:'', deskripsi:'', bahan:[{nama:'', jumlah:'', satuan:''}], alat:'', langkah:[''], potongan:''}); 
+              setFormData({nama:'', kategori_id:'', foto_url:'', deskripsi:'', bahan:[{nama:'', jumlah:'', satuan:''}], alat:'', langkah:[''], potongan:'', status_sop: 'Lengkap', alasan_belum_lengkap: ''}); 
               setIsModalOpen(true); 
             }} className="bg-[#d35400] text-white px-10 py-4 rounded-3xl font-black text-[11px] uppercase shadow-xl hover:scale-105 transition-all">
               + TAMBAH MENU
@@ -184,14 +198,27 @@ const AdminDashboard = () => {
                 <tr key={r.id} className="border-b border-gray-50 font-bold hover:bg-gray-50/50 transition-all">
                   <td className="px-6 py-6 uppercase tracking-tighter text-gray-700 text-[15px] pl-12">{r.nama}</td>
                   <td className="px-6 py-6 text-gray-500 uppercase tracking-widest text-[10px]">{r.kategori?.nama || '-'}</td>
+                  
+                  {/* UI Tabel Diperbarui: Tampil Berdasarkan Status SOP Database */}
                   <td className="px-12 py-6 text-center">
-                    {(!r.langkah || r.langkah.length === 0 || r.langkah[0] === "") ? <span className="text-red-500 bg-red-50 px-5 py-2 rounded-full text-[9px] font-black uppercase italic tracking-widest">⚠️ Kosong</span> : <span className="text-green-600 bg-green-50 px-5 py-2 rounded-full text-[9px] font-black uppercase tracking-widest">✅ Lengkap</span>}
+                    {r.status_sop === 'Belum' ? (
+                      <div className="flex flex-col items-center gap-2">
+                        <span className="text-red-500 bg-red-50 px-5 py-2 rounded-full text-[9px] font-black uppercase italic tracking-widest">⚠️ Belum Lengkap</span>
+                        {r.alasan_belum_lengkap && (
+                          <span className="text-[9px] text-red-400 font-bold max-w-[120px] truncate" title={r.alasan_belum_lengkap}>
+                            "{r.alasan_belum_lengkap}"
+                          </span>
+                        )}
+                      </div>
+                    ) : (
+                      <span className="text-green-600 bg-green-50 px-5 py-2 rounded-full text-[9px] font-black uppercase tracking-widest">✅ Lengkap</span>
+                    )}
                   </td>
+                  
                   <td className="px-12 py-6 text-right font-black">
                     <button onClick={() => { 
                       setEditingRecipe(r); 
                       const parsedLangkah = Array.isArray(r.langkah) && r.langkah.length > 0 ? r.langkah : [''];
-                      // PERBAIKAN: Memastikan array alat di-load menjadi string enter agar bisa diedit di textarea
                       const parsedAlat = Array.isArray(r.alat) ? r.alat.join('\n') : String(r.alat || '').replace(/[{}"]/g, '').split(/[;,]/).join('\n');
                       
                       setFormData({
@@ -202,7 +229,9 @@ const AdminDashboard = () => {
                         bahan: parseExistingBahan(r.bahan), 
                         alat: parsedAlat, 
                         langkah: parsedLangkah, 
-                        potongan: r.potongan || ''
+                        potongan: r.potongan || '',
+                        status_sop: r.status_sop || 'Lengkap', // Load data status
+                        alasan_belum_lengkap: r.alasan_belum_lengkap || '' // Load alasan
                       }); 
                       setIsModalOpen(true); 
                     }} className="text-indigo-600 uppercase text-[10px] hover:underline mr-6">Edit</button>
@@ -234,6 +263,52 @@ const AdminDashboard = () => {
               <h3 className="font-black text-2xl uppercase mb-8 tracking-tighter text-gray-800 italic">{editingRecipe ? 'Edit SOP Menu' : 'Tambah Menu Baru'}</h3>
               <form onSubmit={handleSubmit} className="grid grid-cols-2 gap-6">
                 
+                {/* SECTION 1: Status SOP Interaktif */}
+                <div className="col-span-2 bg-[#fdf8f0] p-8 rounded-[35px] border border-orange-100 shadow-inner mb-2">
+                  <label className="text-[11px] font-black uppercase text-[#d35400] mb-4 block tracking-widest italic leading-none">
+                    Verifikasi Head Chef: Status SOP
+                  </label>
+                  
+                  <div className="flex gap-8 mb-4">
+                    <label className="flex items-center gap-3 cursor-pointer group">
+                      <input 
+                        type="radio" 
+                        name="status_sop" 
+                        value="Lengkap" 
+                        checked={formData.status_sop === 'Lengkap'} 
+                        onChange={(e) => setFormData({...formData, status_sop: e.target.value})} 
+                        className="w-6 h-6 accent-green-600" 
+                      />
+                      <span className="font-bold text-sm text-gray-700 group-hover:text-green-600 transition-colors">SOP Lengkap ✅</span>
+                    </label>
+
+                    <label className="flex items-center gap-3 cursor-pointer group">
+                      <input 
+                        type="radio" 
+                        name="status_sop" 
+                        value="Belum" 
+                        checked={formData.status_sop === 'Belum'} 
+                        onChange={(e) => setFormData({...formData, status_sop: e.target.value})} 
+                        className="w-6 h-6 accent-red-500" 
+                      />
+                      <span className="font-bold text-sm text-gray-700 group-hover:text-red-500 transition-colors">Belum Lengkap ⚠️</span>
+                    </label>
+                  </div>
+
+                  {/* Render Kondisional: Muncul hanya jika status = Belum */}
+                  {formData.status_sop === 'Belum' && (
+                    <div className="mt-4 animate-fade-in">
+                      <textarea 
+                        className="w-full p-5 bg-white rounded-[20px] outline-none font-bold text-xs border border-red-200 focus:ring-2 focus:ring-red-400 resize-none text-red-700 placeholder-red-300" 
+                        placeholder="Contoh: Takaran gramasi masih menunggu acc manajemen, foto menyusul..." 
+                        value={formData.alasan_belum_lengkap} 
+                        onChange={e => setFormData({...formData, alasan_belum_lengkap: e.target.value})}
+                        rows={2}
+                      />
+                    </div>
+                  )}
+                </div>
+
                 <div className="col-span-2 grid grid-cols-1 md:grid-cols-3 gap-6">
                   <div>
                     <label className="text-[10px] font-black uppercase text-gray-400 ml-4 mb-2 block tracking-widest italic leading-none">Nama Menu</label>
