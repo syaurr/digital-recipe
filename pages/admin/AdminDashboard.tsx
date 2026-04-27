@@ -64,14 +64,29 @@ const AdminDashboard = () => {
     return { total, lengkap, belum, pLengkap, topCategories };
   }, [recipes]);
 
-
   const parseExistingBahan = (bahanData: any) => {
     if (!bahanData) return [{ nama: '', jumlah: '', satuan: '' }];
+    
+    // Cek kalau ternyata ada data yang terlanjur tersimpan sebagai string JSON "[{...}]"
+    if (typeof bahanData === 'string' && bahanData.trim().startsWith('[')) {
+      try {
+        const parsedJSON = JSON.parse(bahanData);
+        if (Array.isArray(parsedJSON)) {
+          return parsedJSON.map(b => ({
+            nama: b.nama || '', jumlah: String(b.jumlah || ''), satuan: (b.satuan || '').toLowerCase()
+          }));
+        }
+      } catch (e) {
+        console.error("Gagal parse JSON bahan", e);
+      }
+    }
+
     if (Array.isArray(bahanData)) {
       return bahanData.length > 0 ? bahanData.map(b => ({
         nama: b.nama || '', jumlah: String(b.jumlah || ''), satuan: (b.satuan || '').toLowerCase()
       })) : [{ nama: '', jumlah: '', satuan: '' }];
     }
+    
     if (typeof bahanData === 'string') {
       const parsed = bahanData.split(/[;\n]/).map(item => {
         if (item.includes('|')) {
@@ -118,12 +133,22 @@ const AdminDashboard = () => {
     const tid = toast.loading("Menyimpan Menu...");
     try {
       const payload = {
-        nama: formData.nama, foto_url: formData.foto_url, deskripsi: formData.deskripsi || 'SOP Standar Menu Balista',
-        potongan: formData.potongan, kategori_id: formData.kategori_id, 
-        bahan: formData.bahan.filter(b => b.nama.trim() !== '').map(b => ({ nama: b.nama.trim(), jumlah: parseFloat(b.jumlah) || null, satuan: b.satuan.trim() })),
+        nama: formData.nama, 
+        foto_url: formData.foto_url, 
+        deskripsi: formData.deskripsi || 'SOP Standar Menu Balista',
+        potongan: formData.potongan, 
+        kategori_id: formData.kategori_id, 
+        
+        // PERBAIKAN FATAL: Menjahit kembali array bahan menjadi string "Nama|Jumlah|Satuan;..."
+        bahan: formData.bahan
+          .filter(b => b.nama.trim() !== '')
+          .map(b => `${b.nama.trim()}|${b.jumlah.trim()}|${b.satuan.trim()}`)
+          .join(';'),
+          
         alat: formData.alat.split('\n').map(a => a.trim()).filter(a => a !== ""),
         langkah: formData.langkah.map(l => l.trim()).filter(l => l !== ""),
-        status_sop: formData.status_sop, alasan_belum_lengkap: formData.status_sop === 'Belum' ? formData.alasan_belum_lengkap : null
+        status_sop: formData.status_sop, 
+        alasan_belum_lengkap: formData.status_sop === 'Belum' ? formData.alasan_belum_lengkap : null
       };
 
       if (editingRecipe) {
@@ -258,7 +283,7 @@ const AdminDashboard = () => {
           </div>
         </div>
 
-        {/* TABEL DATA MENU (Responsive Table Wrapper) */}
+        {/* TABEL DATA MENU */}
         <div className="bg-white rounded-[25px] md:rounded-[40px] shadow-sm border border-gray-200 overflow-hidden">
           <div className="overflow-x-auto w-full">
             <table className="w-full text-left text-sm min-w-[900px]">
@@ -337,7 +362,7 @@ const AdminDashboard = () => {
           </div>
         )}
 
-        {/* MODAL FORM (RESPONSIVE) */}
+        {/* MODAL FORM */}
         {isModalOpen && (
           <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[100] flex items-center justify-center p-2 md:p-6 text-left">
             <div className="bg-white rounded-[25px] md:rounded-[45px] w-full max-w-5xl max-h-[95vh] overflow-y-auto p-5 md:p-12 shadow-2xl border border-gray-100">
@@ -399,9 +424,11 @@ const AdminDashboard = () => {
                         <div className="flex w-full md:w-auto gap-2 md:gap-3">
                           <input type="number" placeholder="Jml" className="w-1/2 md:w-24 p-3 md:p-4 bg-gray-50 rounded-xl md:rounded-[15px] outline-none font-bold text-xs md:text-sm text-center focus:ring-2 focus:ring-orange-200" value={item.jumlah} onChange={(e) => handleBahanChange(index, 'jumlah', e.target.value)} />
                           <select className="w-1/2 md:w-36 p-3 md:p-4 bg-gray-50 rounded-xl md:rounded-[15px] outline-none font-bold text-xs md:text-sm cursor-pointer focus:ring-2 focus:ring-orange-200 text-gray-700" value={item.satuan} onChange={(e) => handleBahanChange(index, 'satuan', e.target.value)}>
-                            <option value="">Satuan</option>
-                            <option value="gr">Gram (gr)</option>
-                            <option value="ml">Mili (ml)</option>
+                            <option value="satuan">kosong</option>
+                            <option value="kepal">Kepal</option>
+                            <option value="stick">Stick</option>
+                            <option value="gr">Gram</option>
+                            <option value="ml">Mililiter (ml)</option>
                             <option value="pcs">Pcs</option>
                             <option value="lembar">Lembar</option>
                             <option value="buah">Buah</option>
