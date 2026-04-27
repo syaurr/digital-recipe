@@ -5,25 +5,32 @@ import toast from 'react-hot-toast';
 
 const AdminDashboard = () => {
   const [recipes, setRecipes] = useState<any[]>([]);
+  const [categories, setCategories] = useState<any[]>([]); // STATE BARU UNTUK KATEGORI
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
   const [recipeToDelete, setRecipeToDelete] = useState<any>(null);
   const [editingRecipe, setEditingRecipe] = useState<any | null>(null);
 
-  // STATE BARU: Bahan dan Langkah menggunakan struktur Array
+  // Perbaikan: Ganti 'kategori' menjadi 'kategori_id' agar sesuai dengan relasi database
   const [formData, setFormData] = useState({
-    nama: '', kategori: 'Mentai Rice', foto_url: '', deskripsi: '', 
-    bahan: [{ nama: '', jumlah: '', satuan: '' }], // Format UI Baru
+    nama: '', kategori_id: '', foto_url: '', deskripsi: '', 
+    bahan: [{ nama: '', jumlah: '', satuan: '' }], 
     alat: '', 
     langkah: [''], 
     potongan: ''
   });
 
-  useEffect(() => { fetchRecipes(); }, []);
+  useEffect(() => { 
+    fetchInitialData(); 
+  }, []);
 
-  const fetchRecipes = async () => {
-    const { data } = await supabase.from('resep').select('*').order('created_at', { ascending: false });
-    setRecipes(data || []);
+  // Ambil data resep DAN kategori sekaligus
+  const fetchInitialData = async () => {
+    const { data: recipeData } = await supabase.from('resep').select('*, kategori(nama)').order('created_at', { ascending: false });
+    const { data: categoryData } = await supabase.from('kategori').select('*').order('nama', { ascending: true });
+    
+    setRecipes(recipeData || []);
+    setCategories(categoryData || []);
   };
 
   const cleanFormat = (text: any) => {
@@ -31,11 +38,8 @@ const AdminDashboard = () => {
     return String(text).replace(/[{}"]/g, '').split(';').map(t => t.trim().replace(/\|/g, ' ')).join('\n');
   };
 
-  // --- PARSER CERDAS UNTUK DATA LAMA ---
   const parseExistingBahan = (bahanData: any) => {
     if (!bahanData) return [{ nama: '', jumlah: '', satuan: '' }];
-    
-    // Jika data dari database sudah berbentuk Array
     if (Array.isArray(bahanData)) {
       return bahanData.length > 0 ? bahanData.map(b => ({
         nama: b.nama || '',
@@ -43,30 +47,21 @@ const AdminDashboard = () => {
         satuan: b.satuan || ''
       })) : [{ nama: '', jumlah: '', satuan: '' }];
     }
-
-    // Jika data dari database masih berbentuk String lama (Cth: "Nori|2 lembar;Nasi|200 gr")
     if (typeof bahanData === 'string') {
       const parsed = bahanData.split(/[;\n]/).map(item => {
         if (item.includes('|')) {
           const parts = item.split('|');
           const takaran = parts[1] ? parts[1].trim() : '';
-          const match = takaran.match(/(\d+)\s*(.*)/); // Pisahkan angka dan huruf
-          return {
-            nama: parts[0].trim(),
-            jumlah: match ? match[1] : takaran,
-            satuan: match ? match[2].toLowerCase() : ''
-          };
+          const match = takaran.match(/(\d+)\s*(.*)/);
+          return { nama: parts[0].trim(), jumlah: match ? match[1] : takaran, satuan: match ? match[2].toLowerCase() : '' };
         }
         return { nama: item.trim(), jumlah: '', satuan: '' };
       }).filter(b => b.nama !== '');
-      
       return parsed.length > 0 ? parsed : [{ nama: '', jumlah: '', satuan: '' }];
     }
-
     return [{ nama: '', jumlah: '', satuan: '' }];
   };
 
-  // --- HANDLERS UNTUK BAHAN ---
   const handleBahanChange = (index: number, field: string, value: string) => {
     const newBahan = [...formData.bahan];
     (newBahan[index] as any)[field] = value;
@@ -78,7 +73,6 @@ const AdminDashboard = () => {
     setFormData({ ...formData, bahan: newBahan.length ? newBahan : [{ nama: '', jumlah: '', satuan: '' }] });
   };
 
-  // --- HANDLERS UNTUK LANGKAH ---
   const handleLangkahChange = (index: number, value: string) => {
     const newLangkah = [...formData.langkah];
     newLangkah[index] = value;
@@ -92,6 +86,13 @@ const AdminDashboard = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    // Validasi Kategori
+    if (!formData.kategori_id) {
+      toast.error("Silakan pilih kategori menu terlebih dahulu!");
+      return;
+    }
+
     const tid = toast.loading("Menyimpan Menu...");
     
     try {
@@ -105,7 +106,7 @@ const AdminDashboard = () => {
         foto_url: formData.foto_url,
         deskripsi: formData.deskripsi || 'SOP Standar Menu Balista',
         potongan: formData.potongan,
-        // Bersihkan bahan yang kosong dan pastikan format JSON array
+        kategori_id: formData.kategori_id, // Kategori dikirim ke DB
         bahan: formData.bahan
           .filter(b => b.nama.trim() !== '')
           .map(b => ({
@@ -127,7 +128,7 @@ const AdminDashboard = () => {
 
       toast.success("Berhasil! Menu tersimpan", { id: tid });
       setIsModalOpen(false);
-      fetchRecipes();
+      fetchInitialData();
     } catch (err: any) {
       toast.error(`Gagal: ${err.message}`, { id: tid });
     }
@@ -142,7 +143,7 @@ const AdminDashboard = () => {
       toast.success("Menu Berhasil Dihapus", { id: tid });
       setIsDeleteOpen(false);
       setRecipeToDelete(null);
-      fetchRecipes();
+      fetchInitialData();
     } catch (err: any) {
       toast.error(`Gagal menghapus: ${err.message}`, { id: tid });
     }
@@ -157,7 +158,6 @@ const AdminDashboard = () => {
         window.location.href = '/'; 
         return;
       }
-      fetchRecipes(); 
     };
     checkAccess();
   }, []);
@@ -173,7 +173,7 @@ const AdminDashboard = () => {
           <div className="flex gap-4">
             <button onClick={() => { 
               setEditingRecipe(null); 
-              setFormData({nama:'', kategori:'Mentai Rice', foto_url:'', deskripsi:'', bahan:[{nama:'', jumlah:'', satuan:''}], alat:'', langkah:[''], potongan:''}); 
+              setFormData({nama:'', kategori_id:'', foto_url:'', deskripsi:'', bahan:[{nama:'', jumlah:'', satuan:''}], alat:'', langkah:[''], potongan:''}); 
               setIsModalOpen(true); 
             }} className="bg-[#d35400] text-white px-10 py-4 rounded-3xl font-black text-[11px] uppercase shadow-xl hover:scale-105 transition-all">
               + TAMBAH MENU
@@ -186,7 +186,7 @@ const AdminDashboard = () => {
             <thead className="bg-gray-50 text-[11px] font-black uppercase text-gray-400 border-b">
               <tr>
                 <th className="px-6 py-8 font-black uppercase tracking-tighter pl-12">Nama Menu</th>
-                <th className="px-6 py-8 font-black uppercase tracking-tighter">Deskripsi</th>
+                <th className="px-6 py-8 font-black uppercase tracking-tighter">Kategori</th>
                 <th className="px-12 py-8 text-center font-black uppercase tracking-tighter">Status SOP</th>
                 <th className="px-12 py-8 text-right font-black uppercase tracking-tighter">Aksi</th>
               </tr>
@@ -195,7 +195,7 @@ const AdminDashboard = () => {
               {recipes.map((r) => (
                 <tr key={r.id} className="border-b border-gray-50 font-bold hover:bg-gray-50/50 transition-all">
                   <td className="px-6 py-6 uppercase tracking-tighter text-gray-700 text-[15px] pl-12">{r.nama}</td>
-                  <td className="px-6 py-6 text-gray-400 italic text-[11px] truncate max-w-[200px]">{r.deskripsi}</td>
+                  <td className="px-6 py-6 text-gray-500 uppercase tracking-widest text-[10px]">{r.kategori?.nama || '-'}</td>
                   <td className="px-12 py-6 text-center">
                     {(!r.langkah || r.langkah.length === 0) ? <span className="text-red-500 bg-red-50 px-5 py-2 rounded-full text-[9px] font-black uppercase italic tracking-widest">⚠️ Kosong</span> : <span className="text-green-600 bg-green-50 px-5 py-2 rounded-full text-[9px] font-black uppercase tracking-widest">✅ Lengkap</span>}
                   </td>
@@ -205,7 +205,7 @@ const AdminDashboard = () => {
                       const parsedLangkah = r.langkah && r.langkah.length > 0 ? r.langkah : [''];
                       setFormData({
                         nama: r.nama, 
-                        kategori: r.kategori, 
+                        kategori_id: r.kategori_id || '', // Load kategori yang sudah ada
                         foto_url: r.foto_url || '', 
                         deskripsi: r.deskripsi || '', 
                         bahan: parseExistingBahan(r.bahan), 
@@ -242,13 +242,26 @@ const AdminDashboard = () => {
             <div className="bg-white rounded-[55px] w-full max-w-4xl max-h-[95vh] overflow-y-auto p-12 shadow-2xl border border-gray-100">
               <h3 className="font-black text-2xl uppercase mb-8 tracking-tighter text-gray-800 italic">{editingRecipe ? 'Edit SOP Menu' : 'Tambah Menu Baru'}</h3>
               <form onSubmit={handleSubmit} className="grid grid-cols-2 gap-6">
-                <div>
-                  <label className="text-[10px] font-black uppercase text-gray-400 ml-4 mb-2 block tracking-widest italic leading-none">Nama Menu</label>
-                  <input required className="w-full p-5 bg-gray-50 rounded-[25px] outline-none font-bold text-sm" value={formData.nama} onChange={e => setFormData({...formData, nama: e.target.value})} />
-                </div>
-                <div>
-                  <label className="text-[10px] font-black uppercase text-gray-400 ml-4 mb-2 block tracking-widest italic leading-none">Potongan / Porsi</label>
-                  <input required className="w-full p-5 bg-gray-50 rounded-[25px] outline-none font-bold text-sm" placeholder="Contoh: 8 potong" value={formData.potongan} onChange={e => setFormData({...formData, potongan: e.target.value})} />
+                
+                {/* BARIS PERTAMA: Nama, Kategori, Potongan */}
+                <div className="col-span-2 grid grid-cols-1 md:grid-cols-3 gap-6">
+                  <div>
+                    <label className="text-[10px] font-black uppercase text-gray-400 ml-4 mb-2 block tracking-widest italic leading-none">Nama Menu</label>
+                    <input required className="w-full p-5 bg-gray-50 rounded-[25px] outline-none font-bold text-sm" value={formData.nama} onChange={e => setFormData({...formData, nama: e.target.value})} />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-black uppercase text-gray-400 ml-4 mb-2 block tracking-widest italic leading-none">Kategori</label>
+                    <select required className="w-full p-5 bg-gray-50 rounded-[25px] outline-none font-bold text-sm cursor-pointer text-gray-700" value={formData.kategori_id} onChange={e => setFormData({...formData, kategori_id: e.target.value})}>
+                      <option value="">Pilih Kategori...</option>
+                      {categories.map(cat => (
+                        <option key={cat.id} value={cat.id}>{cat.nama}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-black uppercase text-gray-400 ml-4 mb-2 block tracking-widest italic leading-none">Potongan / Porsi</label>
+                    <input className="w-full p-5 bg-gray-50 rounded-[25px] outline-none font-bold text-sm" placeholder="Contoh: 8 potong" value={formData.potongan} onChange={e => setFormData({...formData, potongan: e.target.value})} />
+                  </div>
                 </div>
 
                 <div className="col-span-2">
@@ -256,7 +269,6 @@ const AdminDashboard = () => {
                   <textarea className="w-full p-5 bg-gray-50 rounded-[25px] h-20 outline-none font-bold text-xs resize-none" placeholder="Contoh: Menu lezat khas Balista..." value={formData.deskripsi} onChange={e => setFormData({...formData, deskripsi: e.target.value})} />
                 </div>
 
-                {/* UI BAHAN-BAHAN YANG SUDAH DIROMBAK (DYNAMIC FIELDS) */}
                 <div className="col-span-2 bg-orange-50/30 p-8 rounded-[35px] border border-orange-100">
                   <label className="text-[10px] font-black uppercase text-gray-400 ml-2 mb-4 block tracking-widest italic leading-none">
                     Bahan-Bahan
@@ -324,7 +336,6 @@ const AdminDashboard = () => {
                   <textarea className="w-full p-5 bg-gray-50 rounded-[25px] min-h-[120px] outline-none font-bold text-xs" value={formData.alat} onChange={e => setFormData({...formData, alat: e.target.value})} />
                 </div>
 
-                {/* UI LANGKAH YANG SUDAH DIROMBAK */}
                 <div className="col-span-2">
                   <label className="text-[10px] font-black uppercase text-gray-400 ml-4 mb-4 block tracking-widest italic leading-none">
                     Metode Pembuatan (SOP)
