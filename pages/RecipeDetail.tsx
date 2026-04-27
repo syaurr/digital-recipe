@@ -1,16 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { supabase } from '../services/supabaseClient';
-// @ts-ignore
-import { generateRecipeDetails } from '../services/aiResepBaru'; 
 import toast from 'react-hot-toast';
+import { getGoogleDriveImageUrl } from '../utils/imageUtils';
 
 const RecipeDetail = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const [resep, setResep] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-  const [isAiLoading, setIsAiLoading] = useState(false);
 
   useEffect(() => {
     const fetchDetail = async () => {
@@ -34,60 +32,18 @@ const RecipeDetail = () => {
     fetchDetail();
   }, [id, navigate]);
 
-  /**
-   * FIX LOGIKA FOTO: Disamakan persis dengan Home.tsx
-   * Menggunakan format googleusercontent untuk render yang lebih stabil
-   */
-  const getImageUrl = (url: string) => {
-    // Gunakan Unsplash sebagai fallback yang lebih stabil daripada via.placeholder
-    const fallbackImage = 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=1000';
-    
-    if (!url || url === 'NULL' || url.trim() === "") {
-      return fallbackImage;
-    }
-
-    const driveIdMatch = url.match(/(?:\/d\/|id=)([\w-]+)/);
-    if (driveIdMatch && (url.includes('drive.google.com') || url.includes('docs.google.com'))) {
-      const driveId = driveIdMatch[1];
-      // FIX TYPO: Menggunakan template literal yang benar agar driveId terbaca
-      return `https://lh3.googleusercontent.com/u/0/d/${driveId}`;
-    }
-    return url;
-  };
-
-  const handleDetailkanAI = async () => {
-    if (!resep) return;
-    setIsAiLoading(true);
-    const tid = toast.loading("AI sedang menyusun SOP...");
-    try {
-      const res = await generateRecipeDetails(resep);
-      if (res && res.steps) {
-        const cleanSteps = res.steps.slice(0, 6).map((s: string) => s.replace(/"/g, "'").trim());
-        const postgresArray = `{"${cleanSteps.join('","')}"}`;
-        
-        const { error } = await supabase
-          .from('resep')
-          .update({ deskripsi: res.description, langkah: postgresArray })
-          .eq('id', resep.id);
-
-        if (!error) {
-          const { data } = await supabase.from('resep').select('*').eq('id', resep.id).single();
-          setResep(data);
-          toast.success("SOP AI Berhasil Diperbarui!", { id: tid });
-        }
-      }
-    } catch (e) { 
-      toast.error("Gagal sinkronisasi AI", { id: tid }); 
-    } finally { 
-      setIsAiLoading(false); 
-    }
-  };
-
-  /**
-   * PARSE BAHAN: Nama di Kiri, Takaran di Kanan
-   */
-  const parseBahanBersih = (val: any) => {
+const parseBahanBersih = (val: any) => {
     if (!val) return [];
+
+    // 1. JIKA DATA BERASAL DARI FORM BARU (Array of Objects)
+    if (Array.isArray(val)) {
+      return val.map(v => ({
+        nama: v.nama,
+        takaran: `${v.jumlah || ''} ${v.satuan || ''}`.trim()
+      }));
+    }
+
+    // 2. JIKA DATA LAMA BERASAL DARI TEKS / EXCEL (String)
     let str = String(val).replace(/[\[\]{}"]/g, '');
     const items = str.split(/[;\n]/).map(i => i.trim()).filter(i => i !== "");
     
@@ -95,34 +51,25 @@ const RecipeDetail = () => {
       if (item.includes('|')) {
         const parts = item.split('|').map(p => p.trim());
         const takaran = parts.slice(1).join(' ').replace(/nama:|jumlah:|satuan:|:/gi, '').trim();
-        return { 
-          nama: parts[0].replace(/nama:|jumlah:|satuan:|:/gi, '').trim(), 
-          takaran: takaran 
-        };
+        return { nama: parts[0].replace(/nama:|jumlah:|satuan:|:/gi, '').trim(), takaran: takaran };
       }
-      
       const match = item.match(/(\d+.*)/); 
       if (match && match.index !== undefined) {
         const namaBahan = item.substring(0, match.index).trim();
         const takaranLengkap = match[0].trim(); 
-        return { 
-          nama: namaBahan.replace(/nama:|jumlah:|satuan:|:/gi, '').trim(), 
-          takaran: takaranLengkap 
-        };
+        return { nama: namaBahan.replace(/nama:|jumlah:|satuan:|:/gi, '').trim(), takaran: takaranLengkap };
       }
-
-      return { 
-        nama: item.replace(/nama:|jumlah:|satuan:|:/gi, '').trim(), 
-        takaran: "" 
-      };
+      return { nama: item.replace(/nama:|jumlah:|satuan:|:/gi, '').trim(), takaran: "" };
     });
   };
 
   const parseLangkahRapi = (val: any) => {
     if (!val) return [];
+    // Data yang masuk dari form sekarang sudah berupa text biasa / array of text dari database PostgreSQL
     let cleanStr = String(val).replace(/[{}'\[\]"]/g, '');
+    // Pecah berdasarkan koma (default format array Postgres saat di-stringify)
     const steps = cleanStr.split(',').map(s => s.trim()).filter(s => s.length > 5);
-    return steps.slice(0, 6);
+    return steps;
   };
 
   if (loading) return <div className="h-screen bg-[#fdf8f0] flex items-center justify-center font-black text-orange-600 animate-pulse uppercase text-xl italic text-left">Memuat SOP Balista...</div>;
@@ -140,20 +87,11 @@ const RecipeDetail = () => {
 
       <div className="max-w-4xl mx-auto py-10 px-4">
         <div className="bg-white rounded-[45px] shadow-xl overflow-hidden border border-gray-100">
-          
-          {/* FOTO MENU: SINKRON DENGAN GALERI */}
           <div className="relative h-[450px] m-4 rounded-[35px] overflow-hidden bg-gray-100 shadow-inner">
             <img 
-              src={getImageUrl(resep.foto_url || resep.foto)} 
+              src={getGoogleDriveImageUrl(resep.foto_url || resep.foto)} 
               alt={resep.nama} 
               className="w-full h-full object-cover transition-transform duration-500 hover:scale-105"
-              onError={(e) => {
-                // Mencegah loop error jika link utama mati
-                const target = e.target as HTMLImageElement;
-                if (target.src !== 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=1000') {
-                  target.src = 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=1000';
-                }
-              }}
             />
             <button onClick={() => navigate('/')} className="absolute top-6 left-6 bg-white/90 px-5 py-2 rounded-xl text-[11px] font-black shadow-md uppercase">← Kembali</button>
           </div>
@@ -172,9 +110,6 @@ const RecipeDetail = () => {
                 <p className="text-orange-900 italic text-sm font-bold leading-relaxed">"{resep.deskripsi || 'SOP Standar Menu Balista Sushi & Tea.'}"</p>
               </div>
             </div>
-            <button onClick={handleDetailkanAI} disabled={isAiLoading} className="bg-[#6347f9] text-white px-8 py-4 rounded-full font-black text-[12px] uppercase shadow-lg hover:bg-indigo-700 transition-all shrink-0">
-              {isAiLoading ? '⏳ PROSES...' : '✨ Detailkan AI'}
-            </button>
           </div>
 
           <div className="px-12 grid grid-cols-1 md:grid-cols-2 gap-8 my-10">

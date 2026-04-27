@@ -1,32 +1,15 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import { supabase } from '../services/supabaseClient';
-// import { generateRecipeSteps } from '../services/geminiService'; // AI Off (Mode Cepat)
 import toast from 'react-hot-toast';
 import Papa from 'papaparse';
 import type { Bahan } from '../types';
+import { getGoogleDriveImageUrl } from '../utils/imageUtils';
 
 interface ImportCSVModalProps {
   isOpen: boolean;
   onClose: () => void;
   onImportSuccess: () => void;
 }
-
-// === FIX: Link Converter Versi Paling Stabil ===
-const getDirectLink = (url: string) => {
-  if (!url) return "";
-  
-  // 1. Cari ID Google Drive (kombinasi huruf/angka acak 25+ karakter)
-  const idMatch = url.match(/[-\w]{25,}/);
-  
-  if (idMatch) {
-    // Menggunakan server lh3 yang lebih cepat & stabil untuk gambar
-    // Syntax yang benar menggunakan `${}`
-    return `https://lh3.googleusercontent.com/d/${idMatch[0]}`;
-  }
-
-  // Jika bukan link Google Drive, kembalikan apa adanya
-  return url;
-};
 
 const ImportCSVModal: React.FC<ImportCSVModalProps> = ({ isOpen, onClose, onImportSuccess }) => {
   const [file, setFile] = useState<File | null>(null);
@@ -129,7 +112,7 @@ const ImportCSVModal: React.FC<ImportCSVModalProps> = ({ isOpen, onClose, onImpo
 
             // 3. CONVERT FOTO (PENTING!)
             // Pastikan row.foto_url ada isinya di Excel. Kalau kosong, hasilnya ""
-            const fotoUrlFinal = getDirectLink(row.foto_url || '');
+            const fotoUrlFinal = getGoogleDriveImageUrl(row.foto_url || '');
 
             // 4. SIMPAN KE DATABASE
             const { data: existingMenu } = await supabase

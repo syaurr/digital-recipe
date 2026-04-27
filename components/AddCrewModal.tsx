@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+/// <reference types="react" />
+import { useState } from 'react';
 import { supabase } from '../services/supabaseClient';
 import toast from 'react-hot-toast';
 

@@ -1,11 +1,11 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '../../services/supabaseClient';
-import { generateRecipeSteps } from '../../services/aiResepBaru';
-import type { Resep, Kategori, Bahan } from '../../types';
+import type { Kategori } from '../../types';
 import Layout from '../../components/Layout';
 import toast from 'react-hot-toast';
 import { getSupabaseErrorMessage } from '../../services/errorUtils';
+import { getGoogleDriveImageUrl } from '../../utils/imageUtils';
 
 const EXCLUSION_LIST = ["Takoyaki & okonomiyaki", "dessert", "mentai rice", "minuman", "ramen", "salad"];
 
@@ -13,22 +13,6 @@ type BahanFormState = {
   nama: string;
   jumlah: string;
   satuan: string;
-};
-
-// --- GANTI FUNGSI INI DI BAGIAN ATAS FILE ---
-
-const getDirectLink = (url: string) => {
-  if (!url) return "";
-  
-  // Deteksi ID dari link Google Drive
-  const idMatch = url.match(/\/d\/(.+?)\//);
-  
-  if (idMatch && idMatch[1]) {
-    // KITA PAKAI LINK KHUSUS 'lh3' (Lebih Cepat & Anti-Blokir)
-    return `https://lh3.googleusercontent.com/d/${idMatch[1]}`;
-  }
-  
-  return url; 
 };
 
 const RecipeForm = () => {
@@ -42,13 +26,14 @@ const RecipeForm = () => {
   const [kategoriId, setKategoriId] = useState('');
   const [bahan, setBahan] = useState<BahanFormState[]>([{ nama: '', jumlah: '', satuan: '' }]);
   const [alat, setAlat] = useState('');
-  const [langkah, setLangkah] = useState('');
   const [potongan, setPotongan] = useState('');
+  
+  // STATE BARU: Langkah menjadi Array
+  const [langkah, setLangkah] = useState<string[]>(['']);
 
   const [categories, setCategories] = useState<Kategori[]>([]);
   const [showPotongan, setShowPotongan] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [aiLoading, setAiLoading] = useState(false);
   const [initialLoading, setInitialLoading] = useState(isEditing);
 
   useEffect(() => {
@@ -70,10 +55,11 @@ const RecipeForm = () => {
       setDeskripsi(data.deskripsi || '');
       setFotoUrl(data.foto_url || '');
       setKategoriId(data.kategori_id);
-      setBahan(data.bahan?.map(b => ({ ...b, jumlah: String(b.jumlah) })) || [{ nama: '', jumlah: '', satuan: '' }]);
+      setBahan(data.bahan?.map((b: { jumlah: any; }) => ({ ...b, jumlah: String(b.jumlah) })) || [{ nama: '', jumlah: '', satuan: '' }]);
       setAlat(data.alat?.join('\n') || '');
-      setLangkah(data.langkah?.join('\n') || '');
       setPotongan(data.potongan || '');
+      // Masukkan langkah ke state, pastikan formatnya array
+      setLangkah(data.langkah?.length ? data.langkah : ['']);
     }
     setInitialLoading(false);
   }, [navigate]);
@@ -102,86 +88,33 @@ const RecipeForm = () => {
 
   const addBahan = () => setBahan([...bahan, { nama: '', jumlah: '', satuan: '' }]);
   const removeBahan = (index: number) => setBahan(bahan.filter((_, i) => i !== index));
-// --- PERBAIKAN UTAMA: Kirim Data sebagai Object ---
-  const handleGenerateSteps = async () => {
-      if (!nama) {
-          toast.error("Harap isi Nama Menu terlebih dahulu.");
-          return;
-      }
 
-      setAiLoading(true);
-      try {
-          // PERBAIKAN DISINI:
-          // Jangan kirim (nama) saja, tapi kirim object { namaMenu: nama, ... }
-          // Kita juga kirim bahan & alat agar AI lebih pintar
-          const payload = {
-            namaMenu: nama,
-            bahan: bahan,
-            alat: alat
-          };
-
-          const data = await generateRecipeSteps(payload);
-          const aiData: any = data;
-
-          // Cek jika balikan dari service adalah error (instruksi cuma 1 baris dan ada kata Error/Gagal)
-          if (aiData.instructions && aiData.instructions.length === 1 && (aiData.instructions[0].includes("⛔") || aiData.instructions[0].includes("⚠️"))) {
-             throw new Error(aiData.instructions[0]);
-          }
-
-          // 2. Update Bahan-bahan dari hasil AI
-          if (aiData.ingredients && Array.isArray(aiData.ingredients)) {
-             const formattedIngredients = aiData.ingredients.map((item: string) => ({
-                 nama: item,
-                 jumlah: '',
-                 satuan: ''
-             }));
-             // Gabungkan bahan yang sudah ada (jika mau) atau timpa
-             // Disini kita timpa jika bahan user masih kosong/default
-             if (bahan.length <= 1 && !bahan[0].nama) {
-                setBahan(formattedIngredients);
-             }
-          }
-
-          // 3. Update Langkah-langkah
-          if (aiData.instructions && Array.isArray(aiData.instructions)) {
-             setLangkah(aiData.instructions.join('\n'));
-          }
-
-          // 4. Update Deskripsi (jika ada)
-          if (aiData.description) {
-              setDeskripsi(aiData.description);
-          }
-
-          toast.success("Resep berhasil dibuat oleh AI!");
-
-      } catch (error: any) {
-          console.error("Error AI:", error);
-          toast.error(error.message || "Gagal menghasilkan resep.");
-      }
-      setAiLoading(false);
+  // HANDLER LANGKAH
+  const handleLangkahChange = (index: number, value: string) => {
+    const newLangkah = [...langkah];
+    newLangkah[index] = value;
+    setLangkah(newLangkah);
   };
-  
+  const addLangkah = () => setLangkah([...langkah, '']);
+  const removeLangkah = (index: number) => {
+    const newLangkah = langkah.filter((_, i) => i !== index);
+    setLangkah(newLangkah.length ? newLangkah : ['']);
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
 
-    // --- PERBAIKAN: Bersihkan URL Foto Google Drive ---
-    const cleanFotoUrl = getDirectLink(fotoUrl);
+    const cleanFotoUrl = getGoogleDriveImageUrl(fotoUrl);
 
     const recipeData = {
       nama,
       deskripsi,
-      foto_url: cleanFotoUrl, // Pakai URL yang sudah dibersihkan
+      foto_url: cleanFotoUrl,
       kategori_id: kategoriId,
-      bahan: bahan
-        .map(b => ({
-          nama: b.nama,
-          satuan: b.satuan,
-          jumlah: parseFloat(b.jumlah) || 0,
-        }))
-        .filter(b => b.nama), // Filter berdasarkan nama saja agar hasil AI tidak hilang jika satuan kosong
+      bahan: bahan.map(b => ({ nama: b.nama, satuan: b.satuan, jumlah: parseFloat(b.jumlah) || 0 })).filter(b => b.nama),
       alat: alat.split('\n').filter(a => a.trim() !== ''),
-      langkah: langkah.split('\n').filter(l => l.trim() !== ''),
+      langkah: langkah.map(l => l.trim()).filter(l => l !== ''),
       potongan: showPotongan ? potongan : null,
     };
 
@@ -207,20 +140,6 @@ const RecipeForm = () => {
 
   return (
     <Layout title={isEditing ? 'Edit Resep' : 'Tambah Resep Baru'}>
-      {loading && (
-        <div className="fixed inset-0 bg-black bg-opacity-60 z-50 flex justify-center items-center" aria-live="assertive" role="alertdialog">
-          <div className="bg-white dark:bg-gray-800 p-8 rounded-lg shadow-xl flex flex-col items-center space-y-4 text-center">
-            <svg className="animate-spin h-12 w-12 text-balista-secondary" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-            </svg>
-            <h3 className="text-xl font-semibold text-gray-800 dark:text-gray-200">Menyimpan Resep...</h3>
-            <p className="text-sm text-gray-600 dark:text-gray-400 max-w-xs">
-              Proses ini mungkin memakan waktu lebih lama jika datanya besar. Mohon jangan tutup halaman ini.
-            </p>
-          </div>
-        </div>
-      )}
       <form onSubmit={handleSubmit} className="space-y-6 max-w-4xl mx-auto bg-white dark:bg-balista-muted/80 p-8 rounded-lg shadow-md">
         
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -242,29 +161,12 @@ const RecipeForm = () => {
           <textarea id="deskripsi" value={deskripsi} onChange={e => setDeskripsi(e.target.value)} rows={2} className="mt-1 block w-full input-style"></textarea>
         </div>
         <div>
-          <label htmlFor="fotoUrl" className="block text-sm font-medium">URL Foto (termasuk Google Drive)</label>
-          <input 
-            type="text" 
-            id="fotoUrl" 
-            value={fotoUrl} 
-            onChange={e => setFotoUrl(e.target.value)} 
-            placeholder="https://drive.google.com/..." 
-            className="mt-1 block w-full input-style"
-          />
-          {/* FITUR BARU: PREVIEW GAMBAR LANGSUNG */}
+          <label htmlFor="fotoUrl" className="block text-sm font-medium">URL Foto (Drive)</label>
+          <input type="text" id="fotoUrl" value={fotoUrl} onChange={e => setFotoUrl(e.target.value)} placeholder="https://drive.google.com/..." className="mt-1 block w-full input-style"/>
           {fotoUrl && (
             <div className="mt-3">
               <p className="text-xs text-gray-500 mb-1">Preview Foto:</p>
-              <img 
-                src={getDirectLink(fotoUrl)} 
-                alt="Preview" 
-                className="w-full h-48 object-cover rounded-md border border-gray-300"
-                onError={(e) => {
-                  // Kalau gambar error, kasih pesan bantuan
-                  (e.target as HTMLImageElement).style.display = 'none';
-                  alert("Gambar tidak muncul? Pastikan akses file di Google Drive sudah 'Siapa saja yang memiliki link' (Anyone with the link).");
-                }}
-              />
+              <img src={getGoogleDriveImageUrl(fotoUrl)} alt="Preview" className="w-full h-48 object-cover rounded-md border border-gray-300" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; alert("Gambar tidak muncul? Pastikan akses file di Google Drive sudah 'Siapa saja yang memiliki link'."); }}/>
             </div>
           )}
         </div>
@@ -277,7 +179,7 @@ const RecipeForm = () => {
                 <input type="text" placeholder="Nama Bahan" value={b.nama} onChange={e => handleBahanChange(i, 'nama', e.target.value)} className="w-1/2 input-style"/>
                 <input type="number" placeholder="Jumlah" value={b.jumlah} onChange={e => handleBahanChange(i, 'jumlah', e.target.value)} className="w-1/4 input-style"/>
                 <input type="text" placeholder="Satuan" value={b.satuan} onChange={e => handleBahanChange(i, 'satuan', e.target.value)} className="w-1/4 input-style"/>
-                <button type="button" onClick={() => removeBahan(i)} className="text-balista-danger hover:text-balista-danger-dark font-bold text-xl">&times;</button>
+                <button type="button" onClick={() => removeBahan(i)} className="text-balista-danger hover:text-balista-danger-dark font-bold text-xl">×</button>
               </div>
             ))}
           </div>
@@ -297,46 +199,51 @@ const RecipeForm = () => {
           )}
         </div>
         
+        {/* UI LANGKAH YANG SUDAH DIROMBAK (DYNAMIC FIELDS) */}
         <div>
-            <div className="flex justify-between items-center mb-1">
-                <label htmlFor="langkah" className="block text-sm font-medium">Langkah-langkah (satu per baris)</label>
-                <button type="button" onClick={handleGenerateSteps} disabled={aiLoading || loading} className="px-3 py-1 border border-transparent text-sm font-medium rounded-md text-white bg-purple-600 hover:bg-purple-700 disabled:bg-purple-400 disabled:opacity-70">
-                    {aiLoading ? 'Memproses...' : 'Generate (AI)'}
+          <label className="block text-sm font-medium mb-3">Metode Pembuatan (SOP)</label>
+          <div className="space-y-3">
+            {langkah.map((step, index) => (
+              <div key={index} className="flex items-start gap-3">
+                <div className="w-10 h-10 shrink-0 bg-gray-100 rounded-md flex items-center justify-center font-bold text-gray-500 border border-gray-200">
+                  {index + 1}
+                </div>
+                <textarea 
+                  required 
+                  className="w-full input-style resize-none" 
+                  placeholder={`Langkah ${index + 1}...`} 
+                  value={step} 
+                  onChange={(e) => handleLangkahChange(index, e.target.value)} 
+                  rows={2}
+                />
+                <button 
+                  type="button" 
+                  onClick={() => removeLangkah(index)} 
+                  className="w-10 h-10 shrink-0 bg-red-50 text-red-500 rounded-md flex items-center justify-center font-black hover:bg-red-500 hover:text-white transition-all border border-red-100"
+                >
+                  ✕
                 </button>
-            </div>
-            <textarea id="langkah" value={langkah} onChange={e => setLangkah(e.target.value)} rows={8} className="block w-full input-style"></textarea>
+              </div>
+            ))}
+          </div>
+          <button type="button" onClick={addLangkah} className="mt-4 px-4 py-2 bg-gray-800 text-white rounded-md text-sm font-medium hover:bg-black transition-all">
+            + Tambah Langkah
+          </button>
         </div>
         
-        <div className="text-right">
-          <button type="button" onClick={() => navigate('/admin')} disabled={loading || aiLoading} className="mr-2 px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 dark:text-gray-200 bg-white dark:bg-balista-primary hover:bg-gray-50 dark:hover:bg-opacity-80 disabled:opacity-50">
+        <div className="text-right pt-6">
+          <button type="button" onClick={() => navigate('/admin')} disabled={loading} className="mr-2 px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50">
             Batal
           </button>
-          <button type="submit" disabled={loading || aiLoading} className="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-green-600 hover:bg-green-700 disabled:bg-green-400">
+          <button type="submit" disabled={loading} className="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-green-600 hover:bg-green-700 disabled:bg-green-400">
             {loading ? 'Menyimpan...' : 'Simpan Resep'}
           </button>
         </div>
         
         <style>{`
-          .input-style {
-            background-color: #fff;
-            color: #111827;
-            border: 1px solid #d1d5db;
-            border-radius: 0.375rem;
-            padding: 0.5rem 0.75rem;
-            box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05);
-            transition: all 0.2s ease-in-out;
-          }
-          .dark .input-style {
-            background-color: #374151;
-            color: #f3f4f6;
-            border-color: #4b5563;
-          }
-          .input-style:focus {
-            outline: 2px solid transparent;
-            outline-offset: 2px;
-            border-color: #cd5b19;
-            box-shadow: 0 0 0 2px #cd5b19;
-          }
+          .input-style { background-color: #fff; color: #111827; border: 1px solid #d1d5db; border-radius: 0.375rem; padding: 0.5rem 0.75rem; box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05); transition: all 0.2s ease-in-out; }
+          .dark .input-style { background-color: #374151; color: #f3f4f6; border-color: #4b5563; }
+          .input-style:focus { outline: 2px solid transparent; outline-offset: 2px; border-color: #cd5b19; box-shadow: 0 0 0 2px #cd5b19; }
         `}</style>
       </form>
     </Layout>

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { supabase } from '../services/supabaseClient';
 import Layout from '../components/Layout';
+import { getGoogleDriveImageUrl } from '../utils/imageUtils';
 
 const Home = () => {
   const [recipes, setRecipes] = useState<any[]>([]);
@@ -27,24 +28,6 @@ const Home = () => {
     } finally {
       setLoading(false);
     }
-  };
-
-  /**
-   * KONVERSI LINK GOOGLE DRIVE KE DIRECT LINK
-   * Agar tag <img> bisa menampilkan foto dari link yang ada di Supabase
-   */
-  const getImageUrl = (url: string) => {
-    if (!url || url === 'NULL' || url.trim() === "") return "";
-
-    const cleanUrl = url.trim();
-    const driveIdMatch = cleanUrl.match(/(?:\/d\/|id=)([\w-]+)/);
-    
-    if (driveIdMatch && (cleanUrl.includes('drive.google.com') || cleanUrl.includes('docs.google.com'))) {
-      const driveId = driveIdMatch[1];
-      // Format Direct Link Google User Content
-      return `https://lh3.googleusercontent.com/u/0/d/${driveId}`;
-    }
-    return cleanUrl;
   };
 
   const categories = ['Semua', 'Mentai Rice', 'Minuman', 'Ramen', 'Sushi Reguler', 'Takoyaki & Okonomiyaki'];
@@ -104,7 +87,7 @@ const Home = () => {
                   <div className="relative h-[240px] overflow-hidden m-4 rounded-[35px] bg-gray-50 shadow-inner">
                     <img 
                       // Memanggil fungsi konversi dengan parameter dari kolom foto_url Supabase
-                      src={getImageUrl(resep.foto_url)} 
+                      src={getGoogleDriveImageUrl(resep.foto_url)} 
                       alt={resep.nama}
                       className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
                       referrerPolicy="no-referrer"
