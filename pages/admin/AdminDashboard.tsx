@@ -5,13 +5,12 @@ import toast from 'react-hot-toast';
 
 const AdminDashboard = () => {
   const [recipes, setRecipes] = useState<any[]>([]);
-  const [categories, setCategories] = useState<any[]>([]); // STATE BARU UNTUK KATEGORI
+  const [categories, setCategories] = useState<any[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
   const [recipeToDelete, setRecipeToDelete] = useState<any>(null);
   const [editingRecipe, setEditingRecipe] = useState<any | null>(null);
 
-  // Perbaikan: Ganti 'kategori' menjadi 'kategori_id' agar sesuai dengan relasi database
   const [formData, setFormData] = useState({
     nama: '', kategori_id: '', foto_url: '', deskripsi: '', 
     bahan: [{ nama: '', jumlah: '', satuan: '' }], 
@@ -24,18 +23,12 @@ const AdminDashboard = () => {
     fetchInitialData(); 
   }, []);
 
-  // Ambil data resep DAN kategori sekaligus
   const fetchInitialData = async () => {
     const { data: recipeData } = await supabase.from('resep').select('*, kategori(nama)').order('created_at', { ascending: false });
     const { data: categoryData } = await supabase.from('kategori').select('*').order('nama', { ascending: true });
     
     setRecipes(recipeData || []);
     setCategories(categoryData || []);
-  };
-
-  const cleanFormat = (text: any) => {
-    if (!text) return '';
-    return String(text).replace(/[{}"]/g, '').split(';').map(t => t.trim().replace(/\|/g, ' ')).join('\n');
   };
 
   const parseExistingBahan = (bahanData: any) => {
@@ -87,7 +80,6 @@ const AdminDashboard = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    // Validasi Kategori
     if (!formData.kategori_id) {
       toast.error("Silakan pilih kategori menu terlebih dahulu!");
       return;
@@ -96,17 +88,12 @@ const AdminDashboard = () => {
     const tid = toast.loading("Menyimpan Menu...");
     
     try {
-      const formatAlatStandard = (text: string) => {
-        if (!text) return "";
-        return text.split('\n').map(i => i.trim()).filter(i => i !== "").join(';');
-      };
-
       const payload = {
         nama: formData.nama,
         foto_url: formData.foto_url,
         deskripsi: formData.deskripsi || 'SOP Standar Menu Balista',
         potongan: formData.potongan,
-        kategori_id: formData.kategori_id, // Kategori dikirim ke DB
+        kategori_id: formData.kategori_id, 
         bahan: formData.bahan
           .filter(b => b.nama.trim() !== '')
           .map(b => ({
@@ -114,7 +101,8 @@ const AdminDashboard = () => {
             jumlah: parseFloat(b.jumlah) || null,
             satuan: b.satuan.trim()
           })),
-        alat: formatAlatStandard(formData.alat),
+        // PERBAIKAN FATAL: Memastikan alat dikirim sebagai Array of Strings!
+        alat: formData.alat.split('\n').map(a => a.trim()).filter(a => a !== ""),
         langkah: formData.langkah.map(l => l.trim()).filter(l => l !== "")
       };
 
@@ -197,19 +185,22 @@ const AdminDashboard = () => {
                   <td className="px-6 py-6 uppercase tracking-tighter text-gray-700 text-[15px] pl-12">{r.nama}</td>
                   <td className="px-6 py-6 text-gray-500 uppercase tracking-widest text-[10px]">{r.kategori?.nama || '-'}</td>
                   <td className="px-12 py-6 text-center">
-                    {(!r.langkah || r.langkah.length === 0) ? <span className="text-red-500 bg-red-50 px-5 py-2 rounded-full text-[9px] font-black uppercase italic tracking-widest">⚠️ Kosong</span> : <span className="text-green-600 bg-green-50 px-5 py-2 rounded-full text-[9px] font-black uppercase tracking-widest">✅ Lengkap</span>}
+                    {(!r.langkah || r.langkah.length === 0 || r.langkah[0] === "") ? <span className="text-red-500 bg-red-50 px-5 py-2 rounded-full text-[9px] font-black uppercase italic tracking-widest">⚠️ Kosong</span> : <span className="text-green-600 bg-green-50 px-5 py-2 rounded-full text-[9px] font-black uppercase tracking-widest">✅ Lengkap</span>}
                   </td>
                   <td className="px-12 py-6 text-right font-black">
                     <button onClick={() => { 
                       setEditingRecipe(r); 
-                      const parsedLangkah = r.langkah && r.langkah.length > 0 ? r.langkah : [''];
+                      const parsedLangkah = Array.isArray(r.langkah) && r.langkah.length > 0 ? r.langkah : [''];
+                      // PERBAIKAN: Memastikan array alat di-load menjadi string enter agar bisa diedit di textarea
+                      const parsedAlat = Array.isArray(r.alat) ? r.alat.join('\n') : String(r.alat || '').replace(/[{}"]/g, '').split(/[;,]/).join('\n');
+                      
                       setFormData({
                         nama: r.nama, 
-                        kategori_id: r.kategori_id || '', // Load kategori yang sudah ada
+                        kategori_id: r.kategori_id || '', 
                         foto_url: r.foto_url || '', 
                         deskripsi: r.deskripsi || '', 
                         bahan: parseExistingBahan(r.bahan), 
-                        alat: cleanFormat(r.alat), 
+                        alat: parsedAlat, 
                         langkah: parsedLangkah, 
                         potongan: r.potongan || ''
                       }); 
@@ -243,7 +234,6 @@ const AdminDashboard = () => {
               <h3 className="font-black text-2xl uppercase mb-8 tracking-tighter text-gray-800 italic">{editingRecipe ? 'Edit SOP Menu' : 'Tambah Menu Baru'}</h3>
               <form onSubmit={handleSubmit} className="grid grid-cols-2 gap-6">
                 
-                {/* BARIS PERTAMA: Nama, Kategori, Potongan */}
                 <div className="col-span-2 grid grid-cols-1 md:grid-cols-3 gap-6">
                   <div>
                     <label className="text-[10px] font-black uppercase text-gray-400 ml-4 mb-2 block tracking-widest italic leading-none">Nama Menu</label>
