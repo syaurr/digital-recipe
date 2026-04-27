@@ -11,6 +11,10 @@ const AdminDashboard = () => {
   const [recipeToDelete, setRecipeToDelete] = useState<any>(null);
   const [editingRecipe, setEditingRecipe] = useState<any | null>(null);
 
+  // STATE BARU UNTUK LOADING UI
+  const [isSaving, setIsSaving] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+
   const [sortBy, setSortBy] = useState('terbaru');
   const [filterCategory, setFilterCategory] = useState('semua');
   const [filterStatus, setFilterStatus] = useState('semua');
@@ -66,27 +70,17 @@ const AdminDashboard = () => {
 
   const parseExistingBahan = (bahanData: any) => {
     if (!bahanData) return [{ nama: '', jumlah: '', satuan: '' }];
-    
-    // Cek kalau ternyata ada data yang terlanjur tersimpan sebagai string JSON "[{...}]"
     if (typeof bahanData === 'string' && bahanData.trim().startsWith('[')) {
       try {
         const parsedJSON = JSON.parse(bahanData);
         if (Array.isArray(parsedJSON)) {
-          return parsedJSON.map(b => ({
-            nama: b.nama || '', jumlah: String(b.jumlah || ''), satuan: (b.satuan || '').toLowerCase()
-          }));
+          return parsedJSON.map(b => ({ nama: b.nama || '', jumlah: String(b.jumlah || ''), satuan: (b.satuan || '').toLowerCase() }));
         }
-      } catch (e) {
-        console.error("Gagal parse JSON bahan", e);
-      }
+      } catch (e) { console.error("Gagal parse JSON bahan", e); }
     }
-
     if (Array.isArray(bahanData)) {
-      return bahanData.length > 0 ? bahanData.map(b => ({
-        nama: b.nama || '', jumlah: String(b.jumlah || ''), satuan: (b.satuan || '').toLowerCase()
-      })) : [{ nama: '', jumlah: '', satuan: '' }];
+      return bahanData.length > 0 ? bahanData.map(b => ({ nama: b.nama || '', jumlah: String(b.jumlah || ''), satuan: (b.satuan || '').toLowerCase() })) : [{ nama: '', jumlah: '', satuan: '' }];
     }
-    
     if (typeof bahanData === 'string') {
       const parsed = bahanData.split(/[;\n]/).map(item => {
         if (item.includes('|')) {
@@ -130,7 +124,9 @@ const AdminDashboard = () => {
     if (!formData.kategori_id) return toast.error("Pilih kategori menu!");
     if (formData.status_sop === 'Belum' && !formData.alasan_belum_lengkap.trim()) return toast.error("Isi alasan kenapa SOP belum lengkap!");
 
-    const tid = toast.loading("Menyimpan Menu...");
+    setIsSaving(true); // NYALAKAN LOADING STATE
+    const tid = toast.loading("Memproses data ke server...");
+    
     try {
       const payload = {
         nama: formData.nama, 
@@ -138,13 +134,7 @@ const AdminDashboard = () => {
         deskripsi: formData.deskripsi || 'SOP Standar Menu Balista',
         potongan: formData.potongan, 
         kategori_id: formData.kategori_id, 
-        
-        // PERBAIKAN FATAL: Menjahit kembali array bahan menjadi string "Nama|Jumlah|Satuan;..."
-        bahan: formData.bahan
-          .filter(b => b.nama.trim() !== '')
-          .map(b => `${b.nama.trim()}|${b.jumlah.trim()}|${b.satuan.trim()}`)
-          .join(';'),
-          
+        bahan: formData.bahan.filter(b => b.nama.trim() !== '').map(b => `${b.nama.trim()}|${b.jumlah.trim()}|${b.satuan.trim()}`).join(';'),
         alat: formData.alat.split('\n').map(a => a.trim()).filter(a => a !== ""),
         langkah: formData.langkah.map(l => l.trim()).filter(l => l !== ""),
         status_sop: formData.status_sop, 
@@ -159,23 +149,34 @@ const AdminDashboard = () => {
         if (error) throw error;
       }
 
-      toast.success("Menu tersimpan", { id: tid });
+      toast.success(editingRecipe ? "Perubahan berhasil disimpan! ✅" : "Menu baru berhasil ditambahkan! ✅", { id: tid });
       setIsModalOpen(false);
       fetchInitialData();
-    } catch (err: any) { toast.error(`Gagal: ${err.message}`, { id: tid }); }
+    } catch (err: any) { 
+      toast.error(`Gagal menyimpan: ${err.message}`, { id: tid }); 
+    } finally {
+      setIsSaving(false); // MATIKAN LOADING STATE
+    }
   };
 
   const handleDeleteRecipe = async () => {
     if (!recipeToDelete) return;
-    const tid = toast.loading("Menghapus...");
+    
+    setIsDeleting(true); // NYALAKAN LOADING HAPUS
+    const tid = toast.loading("Menghapus menu permanen...");
+    
     try {
       const { error } = await supabase.from('resep').delete().eq('id', recipeToDelete.id);
       if (error) throw error;
-      toast.success("Dihapus", { id: tid });
+      toast.success("Menu Berhasil Dihapus 🗑️", { id: tid });
       setIsDeleteOpen(false);
       setRecipeToDelete(null);
       fetchInitialData();
-    } catch (err: any) { toast.error(`Gagal: ${err.message}`, { id: tid }); }
+    } catch (err: any) { 
+      toast.error(`Gagal menghapus: ${err.message}`, { id: tid }); 
+    } finally {
+      setIsDeleting(false); // MATIKAN LOADING HAPUS
+    }
   };
 
   return (
@@ -355,8 +356,20 @@ const AdminDashboard = () => {
               <h3 className="text-xl md:text-2xl font-black uppercase tracking-tighter text-gray-800 mb-2">Hapus Menu?</h3>
               <p className="text-gray-500 font-bold text-xs md:text-sm mb-6 md:mb-8 leading-relaxed">Yakin hapus <span className="text-red-500">"{recipeToDelete?.nama}"</span>? Data hilang permanen.</p>
               <div className="flex flex-col md:flex-row gap-3 md:gap-4">
-                <button onClick={handleDeleteRecipe} className="w-full bg-red-500 text-white py-3 md:py-4 rounded-xl md:rounded-[20px] font-black uppercase text-xs shadow-lg hover:bg-red-600 transition-all">Hapus</button>
-                <button onClick={() => setIsDeleteOpen(false)} className="w-full bg-gray-100 text-gray-500 py-3 md:py-4 rounded-xl md:rounded-[20px] font-black uppercase text-xs hover:bg-gray-200">Batal</button>
+                <button 
+                  onClick={handleDeleteRecipe} 
+                  disabled={isDeleting}
+                  className="w-full bg-red-500 text-white py-3 md:py-4 rounded-xl md:rounded-[20px] font-black uppercase text-xs shadow-lg hover:bg-red-600 transition-all disabled:opacity-50"
+                >
+                  {isDeleting ? 'Menghapus...' : 'Hapus'}
+                </button>
+                <button 
+                  onClick={() => setIsDeleteOpen(false)} 
+                  disabled={isDeleting}
+                  className="w-full bg-gray-100 text-gray-500 py-3 md:py-4 rounded-xl md:rounded-[20px] font-black uppercase text-xs hover:bg-gray-200 disabled:opacity-50"
+                >
+                  Batal
+                </button>
               </div>
             </div>
           </div>
@@ -485,8 +498,10 @@ const AdminDashboard = () => {
 
                 {/* Submit Buttons */}
                 <div className="col-span-1 md:col-span-2 flex flex-col-reverse md:flex-row gap-3 md:gap-4 pt-4 md:pt-8 mt-2 md:mt-0 border-t md:border-none border-gray-100">
-                  <button type="button" onClick={() => setIsModalOpen(false)} className="w-full md:flex-1 bg-gray-100 text-gray-500 py-4 md:py-5 rounded-xl md:rounded-[25px] font-black uppercase text-xs md:text-sm hover:bg-gray-200 transition-all">Batal</button>
-                  <button type="submit" className="w-full md:flex-1 bg-indigo-600 text-white py-4 md:py-5 rounded-xl md:rounded-[25px] font-black uppercase text-xs md:text-sm shadow-xl hover:bg-indigo-700 transition-all">SIMPAN MENU</button>
+                  <button type="button" onClick={() => setIsModalOpen(false)} disabled={isSaving} className="w-full md:flex-1 bg-gray-100 text-gray-500 py-4 md:py-5 rounded-xl md:rounded-[25px] font-black uppercase text-xs md:text-sm hover:bg-gray-200 transition-all disabled:opacity-50">Batal</button>
+                  <button type="submit" disabled={isSaving} className="w-full md:flex-1 bg-indigo-600 text-white py-4 md:py-5 rounded-xl md:rounded-[25px] font-black uppercase text-xs md:text-sm shadow-xl hover:bg-indigo-700 transition-all disabled:bg-indigo-400">
+                    {isSaving ? 'MENYIMPAN... ⏳' : 'SIMPAN MENU'}
+                  </button>
                 </div>
               </form>
             </div>
