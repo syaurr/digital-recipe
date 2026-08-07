@@ -1,55 +1,424 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="id">
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" href="/favicon.ico" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Buku Resep Digital</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+    <title>Buku Resep Digital — Balista Sushi &amp; Tea</title>
+
+    <!-- Google Fonts: Inter + Poppins -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Poppins:ital,wght@0,400;0,500;0,600;0,700;0,900;1,700;1,900&display=swap" rel="stylesheet">
+
+    <!-- Tailwind CSS CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
       tailwind.config = {
         theme: {
           extend: {
             fontFamily: {
-              sans: ['Poppins', 'sans-serif'],
+              sans: ['Inter', 'Poppins', 'sans-serif'],
             },
             colors: {
-              'balista-primary': '#033f3f',
-              'balista-secondary': '#cd5b19',
-              'balista-accent': '#f2d086',
+              'balista-primary':    '#033f3f',
+              'balista-secondary':  '#cd5b19',
+              'balista-accent':     '#f2d086',
               'balista-background': '#f1d9a5',
-              'balista-danger': '#d6302a',
-              'balista-danger-dark': '#6b1815',
-              'balista-muted': '#4f7979',
-              'balista-light': '#ffffff',
-            }
+              'balista-danger':     '#d6302a',
+              'balista-danger-dark':'#6b1815',
+              'balista-muted':      '#4f7979',
+              'balista-light':      '#ffffff',
+            },
+            backdropBlur: {
+              xs: '2px',
+            },
+            animation: {
+              'float':     'float 6s ease-in-out infinite',
+              'float-slow':'float 9s ease-in-out infinite',
+              'slide-up':  'slideUp 0.5s ease-out both',
+              'fade-in':   'fadeIn 0.4s ease-out both',
+              'pulse-glow':'pulseGlow 2s ease-in-out infinite',
+              'orb1':      'orbMove1 12s ease-in-out infinite',
+              'orb2':      'orbMove2 15s ease-in-out infinite',
+              'orb3':      'orbMove3 10s ease-in-out infinite',
+              'spin-slow': 'spin 3s linear infinite',
+            },
+            keyframes: {
+              float: {
+                '0%, 100%': { transform: 'translateY(0px)' },
+                '50%':       { transform: 'translateY(-12px)' },
+              },
+              slideUp: {
+                '0%':   { opacity: '0', transform: 'translateY(28px)' },
+                '100%': { opacity: '1', transform: 'translateY(0)' },
+              },
+              fadeIn: {
+                '0%':   { opacity: '0' },
+                '100%': { opacity: '1' },
+              },
+              pulseGlow: {
+                '0%, 100%': { boxShadow: '0 0 20px rgba(205, 91, 25, 0.3)' },
+                '50%':       { boxShadow: '0 0 40px rgba(205, 91, 25, 0.7), 0 0 80px rgba(205, 91, 25, 0.2)' },
+              },
+              orbMove1: {
+                '0%':   { transform: 'translate(0, 0) scale(1)' },
+                '33%':  { transform: 'translate(60px, -80px) scale(1.1)' },
+                '66%':  { transform: 'translate(-40px, 60px) scale(0.9)' },
+                '100%': { transform: 'translate(0, 0) scale(1)' },
+              },
+              orbMove2: {
+                '0%':   { transform: 'translate(0, 0) scale(1)' },
+                '25%':  { transform: 'translate(-80px, 40px) scale(1.15)' },
+                '75%':  { transform: 'translate(60px, -60px) scale(0.85)' },
+                '100%': { transform: 'translate(0, 0) scale(1)' },
+              },
+              orbMove3: {
+                '0%':   { transform: 'translate(0, 0) scale(1)' },
+                '50%':  { transform: 'translate(40px, 80px) scale(1.2)' },
+                '100%': { transform: 'translate(0, 0) scale(1)' },
+              },
+            },
           }
         }
       }
     </script>
-    <!-- <script type="importmap">
-    {
-      "imports": {
-        "react": "https://esm.sh/react@18.2.0",
-        "react/": "https://esm.sh/react@18.2.0/",
-        "react-dom": "https://esm.sh/react-dom@18.2.0",
-        "react-dom/": "https://esm.sh/react-dom@18.2.0/",
-        "react-router-dom": "https://esm.sh/react-router-dom@6.22.3",
-        "react-hot-toast": "https://esm.sh/react-hot-toast@2.4.1",
-        "@supabase/supabase-js": "https://esm.sh/@supabase/supabase-js@2.39.8",
-        "@google/generative-ai": "https://esm.run/@google/generative-ai"
-      }
-    }
-    </script> -->
+
     <style>
-      body { font-family: 'Poppins', sans-serif; }
+      /* ============================================
+         GLOBAL SECURITY: ANTI-COPY
+         ============================================ */
+      * {
+        -webkit-user-select: none;
+        -moz-user-select: none;
+        -ms-user-select: none;
+        user-select: none;
+
+        /* MOBILE: Anti long-press callout (iOS: "Copy/Share/Look Up") */
+        -webkit-touch-callout: none;
+
+        /* MOBILE: Hapus highlight biru tap di Android */
+        -webkit-tap-highlight-color: transparent;
+      }
+
+      /* Izinkan text-select hanya untuk input form */
+      input, textarea {
+        -webkit-user-select: text;
+        -moz-user-select: text;
+        user-select: text;
+        -webkit-touch-callout: default;
+      }
+
+      /* ============================================
+         ANTI-SCREENSHOT via CSS PRINT MEDIA
+         Saat user screenshot via Share > Print (iOS/Android),
+         atau Ctrl+P, seluruh konten disembunyikan.
+         ============================================ */
+      @media print {
+        html, body, #root {
+          display: none !important;
+          visibility: hidden !important;
+        }
+        * {
+          display: none !important;
+          visibility: hidden !important;
+          color: transparent !important;
+          background: #000 !important;
+        }
+      }
+
+      /* ============================================
+         BASE STYLES
+         ============================================ */
+      body {
+        font-family: 'Inter', 'Poppins', sans-serif;
+        background: #f1d9a5;
+        overflow-x: hidden;
+      }
+
+      /* ============================================
+         GLASSMORPHISM UTILITIES
+         ============================================ */
+      .glass {
+        background: rgba(255, 255, 255, 0.15);
+        backdrop-filter: blur(16px);
+        -webkit-backdrop-filter: blur(16px);
+        border: 1px solid rgba(255, 255, 255, 0.25);
+      }
+
+      .glass-dark {
+        background: rgba(3, 63, 63, 0.25);
+        backdrop-filter: blur(20px);
+        -webkit-backdrop-filter: blur(20px);
+        border: 1px solid rgba(255, 255, 255, 0.15);
+      }
+
+      .glass-card {
+        background: rgba(255, 255, 255, 0.82);
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
+        border: 1px solid rgba(255, 255, 255, 0.6);
+      }
+
+      .glass-header {
+        background: rgba(255, 255, 255, 0.75);
+        backdrop-filter: blur(20px);
+        -webkit-backdrop-filter: blur(20px);
+        border-bottom: 1px solid rgba(255, 255, 255, 0.4);
+      }
+
+      /* ============================================
+         FLOATING CARD ANIMATION
+         ============================================ */
+      .float-card {
+        transition: transform 0.45s cubic-bezier(0.34, 1.56, 0.64, 1),
+                    box-shadow 0.45s cubic-bezier(0.34, 1.56, 0.64, 1);
+      }
+      .float-card:hover {
+        transform: translateY(-14px) scale(1.02);
+        box-shadow: 0 32px 64px -12px rgba(3, 63, 63, 0.18),
+                    0 0 0 1px rgba(205, 91, 25, 0.08);
+      }
+
+      /* ============================================
+         SLIDE-UP STAGGER ANIMATIONS
+         ============================================ */
+      .slide-up-1  { animation: slideUp 0.5s 0.05s ease-out both; }
+      .slide-up-2  { animation: slideUp 0.5s 0.10s ease-out both; }
+      .slide-up-3  { animation: slideUp 0.5s 0.15s ease-out both; }
+      .slide-up-4  { animation: slideUp 0.5s 0.20s ease-out both; }
+      .slide-up-5  { animation: slideUp 0.5s 0.25s ease-out both; }
+      .slide-up-6  { animation: slideUp 0.5s 0.30s ease-out both; }
+      .slide-up-7  { animation: slideUp 0.5s 0.35s ease-out both; }
+      .slide-up-8  { animation: slideUp 0.5s 0.40s ease-out both; }
+      .slide-up-9  { animation: slideUp 0.5s 0.45s ease-out both; }
+      .slide-up-10 { animation: slideUp 0.5s 0.50s ease-out both; }
+      .slide-up-11 { animation: slideUp 0.5s 0.55s ease-out both; }
+      .slide-up-12 { animation: slideUp 0.5s 0.60s ease-out both; }
+
+      @keyframes slideUp {
+        0%   { opacity: 0; transform: translateY(28px); }
+        100% { opacity: 1; transform: translateY(0); }
+      }
+
+      @keyframes fadeIn {
+        0%   { opacity: 0; }
+        100% { opacity: 1; }
+      }
+
+      @keyframes float {
+        0%, 100% { transform: translateY(0px); }
+        50%       { transform: translateY(-12px); }
+      }
+
+      @keyframes orbMove1 {
+        0%   { transform: translate(0, 0) scale(1); }
+        33%  { transform: translate(60px, -80px) scale(1.1); }
+        66%  { transform: translate(-40px, 60px) scale(0.9); }
+        100% { transform: translate(0, 0) scale(1); }
+      }
+      @keyframes orbMove2 {
+        0%   { transform: translate(0, 0) scale(1); }
+        25%  { transform: translate(-80px, 40px) scale(1.15); }
+        75%  { transform: translate(60px, -60px) scale(0.85); }
+        100% { transform: translate(0, 0) scale(1); }
+      }
+      @keyframes orbMove3 {
+        0%   { transform: translate(0, 0) scale(1); }
+        50%  { transform: translate(40px, 80px) scale(1.2); }
+        100% { transform: translate(0, 0) scale(1); }
+      }
+      @keyframes pulseGlow {
+        0%, 100% { box-shadow: 0 0 20px rgba(205,91,25,0.3); }
+        50%       { box-shadow: 0 0 40px rgba(205,91,25,0.7), 0 0 80px rgba(205,91,25,0.2); }
+      }
+
+      /* ============================================
+         SECURITY OVERLAY (dikelola via React state)
+         ============================================ */
+      #security-overlay {
+        display: none;
+        position: fixed;
+        inset: 0;
+        z-index: 99999;
+        background: rgba(3, 63, 63, 0.92);
+        backdrop-filter: blur(24px);
+        -webkit-backdrop-filter: blur(24px);
+        animation: fadeIn 0.3s ease-out;
+      }
+
+      /* ============================================
+         SEARCH BAR EXPAND
+         ============================================ */
+      .search-expand {
+        transition: width 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+      }
+
+      /* ============================================
+         SCROLLBAR CUSTOM
+         ============================================ */
+      ::-webkit-scrollbar { width: 6px; height: 6px; }
+      ::-webkit-scrollbar-track { background: transparent; }
+      ::-webkit-scrollbar-thumb {
+        background: rgba(205, 91, 25, 0.35);
+        border-radius: 999px;
+      }
+      ::-webkit-scrollbar-thumb:hover {
+        background: rgba(205, 91, 25, 0.65);
+      }
+
+      /* ============================================
+         GLOW BUTTON EFFECT
+         ============================================ */
+      .btn-glow {
+        position: relative;
+        overflow: hidden;
+        transition: all 0.3s ease;
+      }
+      .btn-glow::before {
+        content: '';
+        position: absolute;
+        inset: 0;
+        background: linear-gradient(135deg, rgba(255,255,255,0.15) 0%, transparent 60%);
+        opacity: 0;
+        transition: opacity 0.3s ease;
+      }
+      .btn-glow:hover::before { opacity: 1; }
+
+      /* ============================================
+         INPUT FOCUS GLOW
+         ============================================ */
+      .input-glow:focus {
+        outline: none;
+        box-shadow: 0 0 0 3px rgba(205, 91, 25, 0.25),
+                    0 0 20px rgba(205, 91, 25, 0.1);
+        border-color: rgba(205, 91, 25, 0.5);
+      }
+
+      /* ============================================
+         ACCORDION ANIMATION
+         ============================================ */
+      .accordion-content {
+        overflow: hidden;
+        transition: max-height 0.4s cubic-bezier(0.4, 0, 0.2, 1),
+                    opacity 0.3s ease;
+      }
     </style>
   </head>
-  <body class="bg-balista-background dark:bg-balista-primary">
+
+  <body class="bg-balista-background">
     <div id="root"></div>
     <script type="module" src="/index.tsx"></script>
+
+    <!-- ============================================
+         GLOBAL SECURITY SCRIPTS
+         ============================================ -->
+    <script>
+      // ── Anti Klik Kanan ──────────────────────────
+      document.addEventListener('contextmenu', function(e) {
+        e.preventDefault();
+        return false;
+      });
+
+      // ── Anti DevTools Keyboard Shortcuts ─────────
+      document.addEventListener('keydown', function(e) {
+        if (e.key === 'F12') { e.preventDefault(); return false; }
+        if (e.ctrlKey && e.shiftKey && ['I','J','C'].includes(e.key.toUpperCase())) {
+          e.preventDefault(); return false;
+        }
+        if (e.ctrlKey && e.key.toUpperCase() === 'U') { e.preventDefault(); return false; }
+        if (e.ctrlKey && e.key.toUpperCase() === 'S') { e.preventDefault(); return false; }
+        if (e.ctrlKey && e.key.toUpperCase() === 'P') { e.preventDefault(); return false; }
+        if (e.ctrlKey && e.key.toUpperCase() === 'A') {
+          var tag = document.activeElement && document.activeElement.tagName;
+          if (tag !== 'INPUT' && tag !== 'TEXTAREA') {
+            e.preventDefault(); return false;
+          }
+        }
+      });
+
+      // ── Anti PrintScreen Desktop ─────────────────
+      document.addEventListener('keyup', function(e) {
+        if (e.key === 'PrintScreen') {
+          navigator.clipboard && navigator.clipboard.writeText('').catch(function(){});
+        }
+      });
+
+      // ── MOBILE: Anti Long-Press & Selection ──────
+      // Mencegah popup "Copy / Share / Inspect" saat long-press di Android Chrome
+      document.addEventListener('touchstart', function(e) {
+        var tag = e.target && e.target.tagName;
+        if (tag !== 'INPUT' && tag !== 'TEXTAREA') {
+          if (e.touches.length > 1) {
+            e.preventDefault();
+          }
+        }
+      }, { passive: false });
+
+      // Hapus seleksi teks yang terjadi via gesture mobile
+      document.addEventListener('selectionchange', function() {
+        var sel = window.getSelection();
+        if (sel && sel.toString().length > 0) {
+          var tag = document.activeElement && document.activeElement.tagName;
+          if (tag !== 'INPUT' && tag !== 'TEXTAREA') {
+            sel.removeAllRanges();
+          }
+        }
+      });
+
+      // ── ANTI-SCREENSHOT MOBILE: beforeprint / afterprint ─
+      // iOS: Share → Print, Android: Share → Print → preview
+      // Keduanya memicu window.beforeprint sebelum render pratinjau cetak.
+      // Kita sembunyikan semua konten dan tampilkan layar hitam.
+      var _printOverlay = null;
+
+      window.addEventListener('beforeprint', function() {
+        var root = document.getElementById('root');
+        if (root) root.style.display = 'none';
+
+        _printOverlay = document.createElement('div');
+        _printOverlay.style.cssText =
+          'position:fixed;inset:0;z-index:999999;background:#000000;' +
+          'display:flex;flex-direction:column;align-items:center;justify-content:center;' +
+          'font-family:Inter,Poppins,sans-serif;';
+        _printOverlay.innerHTML =
+          '<svg width="64" height="64" viewBox="0 0 24 24" fill="none" ' +
+          'stroke="rgba(214,48,42,0.85)" stroke-width="1.5" stroke-linecap="round" ' +
+          'style="margin-bottom:20px">' +
+          '<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>' +
+          '<path d="M12 8v4"/><path d="M12 16h.01"/></svg>' +
+          '<p style="color:#d6302a;font-size:1.2rem;font-weight:900;letter-spacing:0.1em;' +
+          'text-transform:uppercase;margin:0 0 12px 0;text-align:center;">PELANGGARAN HUKUM TERDETEKSI</p>' +
+          '<p style="color:rgba(255,255,255,0.7);font-size:0.8rem;font-weight:500;line-height:1.5;' +
+          'text-align:center;max-width:80%;margin:0 0 20px 0;">' +
+          'Mencetak atau menyimpan resep ini merupakan pelanggaran terhadap <strong>UU Rahasia Dagang</strong> dan <strong>UU ITE</strong>. ' +
+          'Aktivitas ini telah dicatat ke dalam log keamanan sistem.</p>' +
+          '<p style="color:rgba(255,255,255,0.3);font-size:0.65rem;font-weight:700;' +
+          'letter-spacing:0.2em;text-transform:uppercase;margin:0;">' +
+          'Balista Sushi &amp; Tea &mdash; Strictly Confidential</p>';
+        document.body.appendChild(_printOverlay);
+      });
+
+      window.addEventListener('afterprint', function() {
+        var root = document.getElementById('root');
+        if (root) root.style.display = '';
+        if (_printOverlay && _printOverlay.parentNode) {
+          _printOverlay.parentNode.removeChild(_printOverlay);
+          _printOverlay = null;
+        }
+      });
+
+      // ── ANTI-DEVTOOLS: Debugger Trap ──────────────
+      // Memicu pause jika user memaksa buka DevTools (menghalangi inspeksi kode)
+      setInterval(function() {
+        var before = new Date().getTime();
+        debugger;
+        var after = new Date().getTime();
+        if (after - before > 100) {
+          // DevTools terbuka (karena eksekusi tertahan oleh debugger)
+          document.body.innerHTML = '<div style="background:#000;color:#d6302a;height:100vh;display:flex;align-items:center;justify-content:center;font-family:sans-serif;font-weight:bold;text-align:center;padding:20px;"><h2>Akses Ditolak. Halaman ini diproteksi.</h2></div>';
+        }
+      }, 2000);
+    </script>
   </body>
 </html>

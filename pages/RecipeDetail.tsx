@@ -63,12 +63,38 @@ const parseBahanBersih = (val: any) => {
     });
   };
 
-  const parseLangkahRapi = (val: any) => {
+  const parseLangkahRapi = (val: any): string[] => {
     if (!val) return [];
-    // Data yang masuk dari form sekarang sudah berupa text biasa / array of text dari database PostgreSQL
-    let cleanStr = String(val).replace(/[{}'\[\]"]/g, '');
-    // Pecah berdasarkan koma (default format array Postgres saat di-stringify)
-    const steps = cleanStr.split(',').map(s => s.trim()).filter(s => s.length > 5);
+
+    // 1. Jika data sudah berupa Array (dari form baru / Supabase mengembalikan array)
+    if (Array.isArray(val)) {
+      return val
+        .map((s: any) => String(s).trim())
+        .filter((s: string) => s.length > 0);
+    }
+
+    // 2. Jika data berupa string JSON array dari Postgres (misal: '{"langkah 1","langkah 2"}')
+    const str = String(val);
+
+    // Coba parse sebagai JSON array
+    try {
+      const parsed = JSON.parse(str);
+      if (Array.isArray(parsed)) {
+        return parsed.map((s: any) => String(s).trim()).filter((s: string) => s.length > 0);
+      }
+    } catch {
+      // bukan JSON, lanjut ke parsing manual
+    }
+
+    // 3. Format array Postgres: {"langkah 1","langkah 2"} atau {langkah 1,langkah 2}
+    //    Pecah HANYA berdasarkan newline atau semicolon — BUKAN koma
+    //    agar kalimat yang mengandung koma tidak terpotong
+    const cleanStr = str.replace(/^\{|\}$/g, '').replace(/"/g, '');
+    const steps = cleanStr
+      .split(/[;\n]+/)
+      .map((s: string) => s.trim())
+      .filter((s: string) => s.length > 0);
+
     return steps;
   };
 

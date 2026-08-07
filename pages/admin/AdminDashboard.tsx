@@ -1,11 +1,16 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useContext } from 'react';
 import Layout from '../../components/Layout';
 import { supabase } from '../../services/supabaseClient';
+import { AuthContext } from '../../context/AuthContext';
 import toast from 'react-hot-toast';
 
 const AdminDashboard = () => {
+  const authCtx = useContext(AuthContext);
+  const currentUser = authCtx?.user;
+
   const [recipes, setRecipes] = useState<any[]>([]);
   const [categories, setCategories] = useState<any[]>([]);
+  const [loginActivity, setLoginActivity] = useState<any[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
   const [recipeToDelete, setRecipeToDelete] = useState<any>(null);
@@ -27,7 +32,52 @@ const AdminDashboard = () => {
 
   useEffect(() => { 
     fetchInitialData(); 
+    fetchLoginActivity();
   }, []);
+
+  const fetchLoginActivity = async () => {
+    try {
+      const { data: profiles } = await supabase
+        .from('profiles')
+        .select('id, email, role');
+
+      const { data: { session } } = await supabase.auth.getSession();
+      const currentId = session?.user?.id;
+
+      const parseUA = (ua: string) => {
+        if (!ua) return { device: 'Tidak diketahui', mobile: false };
+        const mobile = /Android|iPhone|iPad|Mobile/i.test(ua);
+        let browser = 'Browser';
+        if (/Edg\//i.test(ua)) browser = 'Edge';
+        else if (/OPR\//i.test(ua)) browser = 'Opera';
+        else if (/Chrome\//i.test(ua)) browser = 'Chrome';
+        else if (/Firefox\//i.test(ua)) browser = 'Firefox';
+        else if (/Safari\//i.test(ua)) browser = 'Safari';
+        let os = '';
+        if (/Windows/i.test(ua)) os = 'Windows';
+        else if (/iPhone/i.test(ua)) os = 'iPhone';
+        else if (/Android/i.test(ua)) os = 'Android';
+        else if (/Mac/i.test(ua)) os = 'macOS';
+        return { device: `${browser}${os ? ' · ' + os : ''}`, mobile };
+      };
+
+      // Not used anymore since we removed the columns
+      const fmtTime = (d: string | null) => '—';
+
+      const enriched = (profiles || []).map((p: any) => ({
+        ...p,
+        isActive: p.id === currentId,
+        deviceInfo: p.id === currentId ? parseUA(navigator.userAgent) : null,
+        lastLoginFmt: p.id === currentId ? 'Sekarang (Aktif)' : '—',
+      }));
+
+      // Sort: aktif dulu, lalu sisanya
+      enriched.sort((a: any, b: any) => Number(b.isActive) - Number(a.isActive));
+      setLoginActivity(enriched);
+    } catch (err) {
+      console.error('Gagal fetch login activity:', err);
+    }
+  };
 
   const fetchInitialData = async () => {
     const { data: recipeData } = await supabase.from('resep').select('*, kategori(nama)').order('created_at', { ascending: false });
@@ -251,6 +301,123 @@ const AdminDashboard = () => {
                 <p className="text-[9px] md:text-[10px] font-black text-red-400 uppercase tracking-widest mt-1">Belum</p>
               </div>
             </div>
+          </div>
+        </div>
+
+        {/* ═══ LOGIN ACTIVITY WIDGET ═══ */}
+        <div className="glass-card rounded-[25px] md:rounded-[35px] border border-white/60 shadow-sm overflow-hidden mb-8 md:mb-10">
+          
+          {/* Widget Header */}
+          <div className="flex items-center justify-between px-6 py-5 border-b border-balista-primary/8">
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 rounded-xl bg-balista-primary/8 flex items-center justify-center text-sm">🔐</div>
+              <div>
+                <h3 className="font-black text-sm text-balista-primary uppercase tracking-tight italic">Login Activity</h3>
+                <p className="text-[9px] font-bold text-balista-primary/35 uppercase tracking-widest">Status akses akun sistem</p>
+              </div>
+            </div>
+            <button
+              onClick={fetchLoginActivity}
+              className="text-[9px] font-black uppercase tracking-widest text-balista-primary/40
+                         hover:text-balista-secondary transition-colors px-3 py-1.5 rounded-lg hover:bg-balista-secondary/10"
+            >
+              ↻ Refresh
+            </button>
+          </div>
+
+          {/* Widget Body */}
+          <div className="overflow-x-auto">
+            {loginActivity.length === 0 ? (
+              <div className="py-10 text-center">
+                <p className="text-[10px] font-bold text-balista-primary/30 uppercase tracking-widest">Memuat data akun...</p>
+              </div>
+            ) : (
+              <table className="w-full text-left" style={{ minWidth: 620 }}>
+                <thead>
+                  <tr className="bg-balista-primary/3 border-b border-balista-primary/6">
+                    {['Akun', 'Role', 'Login Terakhir', 'Device', 'Status'].map(h => (
+                      <th key={h} className="px-5 py-3 text-[8px] font-black uppercase tracking-widest text-balista-primary/35">{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-balista-primary/5">
+                  {loginActivity.map((acc: any) => (
+                    <tr key={acc.id} className={`transition-all hover:bg-white/70 ${acc.isActive ? 'bg-green-50/50' : ''}`}>
+                      
+                      {/* Email */}
+                      <td className="px-5 py-4">
+                        <div className="flex items-center gap-2.5">
+                          <div className={`w-7 h-7 rounded-lg flex items-center justify-center font-black text-xs shrink-0
+                            ${acc.role === 'admin' ? 'bg-blue-100 text-blue-600' : 'bg-green-100 text-green-600'}`}>
+                            {(acc.email || '?')[0].toUpperCase()}
+                          </div>
+                          <div>
+                            <p className="font-bold text-xs text-balista-primary lowercase truncate max-w-[150px] md:max-w-[200px]">
+                              {acc.email}
+                            </p>
+                            {acc.isActive && (
+                              <span className="text-[8px] font-black text-green-600 uppercase tracking-widest">← Sesi Kamu</span>
+                            )}
+                          </div>
+                        </div>
+                      </td>
+
+                      {/* Role */}
+                      <td className="px-5 py-4">
+                        <span className={`px-2.5 py-1 rounded-lg text-[8px] font-black uppercase tracking-widest whitespace-nowrap
+                          ${acc.role === 'admin' ? 'bg-blue-100 text-blue-700' : 'bg-green-100 text-green-700'}`}>
+                          {acc.role === 'admin' ? '⬡ Admin' : '◆ Crew'}
+                        </span>
+                      </td>
+
+                      {/* Login Terakhir */}
+                      <td className="px-5 py-4">
+                        <p className={`text-xs font-bold ${acc.isActive ? 'text-green-600' : 'text-balista-primary/60'}`}>
+                          {acc.isActive ? '🟢 ' : ''}{acc.lastLoginFmt}
+                        </p>
+                      </td>
+
+                      {/* Device */}
+                      <td className="px-5 py-4">
+                        {acc.isActive && acc.deviceInfo ? (
+                          <p className="text-[10px] font-bold text-balista-primary/60">
+                            {acc.deviceInfo.mobile ? '📱' : '💻'} {acc.deviceInfo.device}
+                          </p>
+                        ) : (
+                          <p className="text-[10px] font-bold text-balista-primary/25 italic">—</p>
+                        )}
+                      </td>
+
+                      {/* Status */}
+                      <td className="px-5 py-4">
+                        <span style={{
+                          display: 'inline-flex', alignItems: 'center', gap: 5,
+                          padding: '3px 10px', borderRadius: 999, fontSize: 9,
+                          fontWeight: 800, letterSpacing: '0.1em', textTransform: 'uppercase',
+                          background: acc.isActive ? 'rgba(34,197,94,0.12)' : 'rgba(156,163,175,0.12)',
+                          color: acc.isActive ? '#16a34a' : '#9ca3af',
+                          border: `1px solid ${acc.isActive ? 'rgba(34,197,94,0.25)' : 'rgba(156,163,175,0.2)'}`,
+                          whiteSpace: 'nowrap',
+                        }}>
+                          <span style={{
+                            width: 5, height: 5, borderRadius: '50%', flexShrink: 0,
+                            background: acc.isActive ? '#22c55e' : '#d1d5db',
+                          }} />
+                          {acc.isActive ? 'Aktif' : 'Offline'}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+
+          {/* Footer note */}
+          <div className="px-6 py-3 border-t border-balista-primary/6">
+            <p className="text-[8px] font-bold text-balista-primary/25 uppercase tracking-widest">
+              ℹ Info device hanya tampil untuk akun yang sedang aktif di browser ini · Untuk detail lengkap → halaman Tim
+            </p>
           </div>
         </div>
 
