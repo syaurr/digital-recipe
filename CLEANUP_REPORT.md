@@ -200,3 +200,4 @@ Tindakan-tindakan berikut ini berada di luar ruang lingkup otomatisasi kode dan 
 
 4. **Pembaruan Informasi Portofolio Tambahan:**
    - Lengkapi rincian tugas non-coding (seperti wawancara alur dapur restoran, riset operasional, dan pengujian lapangan) pada tabel kontributor di `README.md`.
+
