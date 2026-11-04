@@ -1,3 +1,5 @@
+import { supabase } from './supabaseClient';
+
 /**
  * Layanan untuk mengenerate detail SOP resep menggunakan AI.
  * Seluruh pemanggilan AI dialihkan ke Vercel Serverless Function (/api/generate-recipe)
@@ -9,11 +11,20 @@ export const generateRecipeDetails = async (payload: any) => {
   const alat = payload?.alat || '';
 
   try {
+    const { data: sessionData } = await supabase.auth.getSession();
+    const token = sessionData?.session?.access_token;
+
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+    };
+
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+
     const response = await fetch('/api/generate-recipe', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      headers,
       body: JSON.stringify({
         namaMenu,
         bahan,

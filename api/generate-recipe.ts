@@ -11,13 +11,59 @@ export default async function handler(req: any, res: any) {
   }
 
   try {
+    // 1. Verifikasi Autentikasi Sesi Supabase (Anti-Open Proxy)
+    const authHeader =
+      req.headers?.authorization ||
+      req.headers?.Authorization ||
+      (typeof req.headers?.get === 'function' ? req.headers.get('authorization') : null);
+
+    const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
+    const supabaseAnonKey = process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY;
+
+    if (supabaseUrl && supabaseAnonKey) {
+      if (!authHeader || !authHeader.startsWith('Bearer ')) {
+        const errPayload = { error: 'Akses ditolak: Token autentikasi sesi Supabase diperlukan' };
+        if (res?.status) return res.status(401).json(errPayload);
+        return new Response(JSON.stringify(errPayload), {
+          status: 401,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+
+      const userRes = await fetch(`${supabaseUrl.replace(/\/+$/, '')}/auth/v1/user`, {
+        headers: {
+          Authorization: authHeader,
+          apikey: supabaseAnonKey,
+        },
+      });
+
+      if (!userRes.ok) {
+        const errPayload = { error: 'Akses ditolak: Sesi tidak valid atau telah kedaluwarsa' };
+        if (res?.status) return res.status(401).json(errPayload);
+        return new Response(JSON.stringify(errPayload), {
+          status: 401,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+    }
+
     const body = typeof req.body === 'string' ? JSON.parse(req.body) : req.body || {};
-    const namaMenu = body.namaMenu || body.nama || '';
-    const bahan = typeof body.bahan === 'string' ? body.bahan : JSON.stringify(body.bahan || '');
-    const alat = Array.isArray(body.alat) ? body.alat.join(', ') : body.alat || '';
+    const namaMenu = String(body.namaMenu || body.nama || '').trim();
+    const bahan = typeof body.bahan === 'string' ? body.bahan.trim() : JSON.stringify(body.bahan || '');
+    const alat = Array.isArray(body.alat) ? body.alat.join(', ').trim() : String(body.alat || '').trim();
 
     if (!namaMenu) {
       const errPayload = { error: 'Nama menu wajib diisi' };
+      if (res?.status) return res.status(400).json(errPayload);
+      return new Response(JSON.stringify(errPayload), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
+
+    // 2. Pembatasan Panjang Input untuk Mencegah Abuse / Payload Flooding
+    if (namaMenu.length > 200 || bahan.length > 4000 || alat.length > 1000) {
+      const errPayload = { error: 'Input melebihi batas panjang maksimum yang diizinkan' };
       if (res?.status) return res.status(400).json(errPayload);
       return new Response(JSON.stringify(errPayload), {
         status: 400,
@@ -45,7 +91,7 @@ WAJIB JSON MURNI: {
     "steps": ["Langkah 1...", "Langkah 2...", "Langkah 3..."]
 }`;
 
-    // 1. Coba Groq jika ada key-nya
+    // 3. Panggil Groq jika kunci tersedia (dibatasi max_tokens: 1000)
     if (groqKey) {
       const groqResponse = await fetch('https://api.groq.com/openai/v1/chat/completions', {
         method: 'POST',
@@ -58,6 +104,7 @@ WAJIB JSON MURNI: {
           messages: [{ role: 'user', content: prompt }],
           response_format: { type: 'json_object' },
           temperature: 0.2,
+          max_tokens: 1000,
         }),
       });
 
@@ -73,7 +120,7 @@ WAJIB JSON MURNI: {
       }
     }
 
-    // 2. Fallback ke Gemini jika Groq gagal atau key tidak ada
+    // 4. Fallback ke Gemini jika Groq gagal atau kunci tidak ada (dibatasi maxOutputTokens: 1000)
     if (geminiKey) {
       const geminiResponse = await fetch(
         `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${geminiKey}`,
@@ -82,7 +129,10 @@ WAJIB JSON MURNI: {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             contents: [{ parts: [{ text: prompt }] }],
-            generationConfig: { responseMimeType: 'application/json' },
+            generationConfig: {
+              responseMimeType: 'application/json',
+              maxOutputTokens: 1000,
+            },
           }),
         }
       );
