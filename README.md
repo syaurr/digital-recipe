@@ -1,170 +1,183 @@
 # Buku Resep Digital — Balista Sushi & Tea
 
-Aplikasi web modern berbasis Single Page Application (SPA) untuk standarisasi Standard Operating Procedure (SOP) pembuatan menu kuliner, manajemen resep dapur, monitoring akses tim outlet, dan integrasi generasi SOP otomatis berbantuan AI (*AI-assisted recipe generation*).
-
-Aplikasi ini awalnya diinisiasi dari scaffold Google AI Studio, kemudian dikembangkan dan disesuaikan menjadi sistem internal restoran oleh tim beranggotakan 2 orang.
-
----
-
-## Ringkasan Eksekutif (2-Minute Overview)
-
-* **Tujuan Utama:** Menghilangkan disparitas rasa dan SOP operasional antar-outlet kuliner melalui digitalisasi resep interaktif serta menjaga kerahasiaan operasional menu restoran.
-* **Arsitektur:** Client-side React 19 yang responsif dengan komunikasi database langsung ke Supabase (PostgreSQL BaaS), serta pemrosesan AI terisolasi di sisi server melalui Vercel Serverless Functions (`/api/generate-recipe`) untuk mencegah kebocoran API key.
-* **Status Proyek:** Siap pakai (*production-ready*) dengan portofolio fitur lengkap untuk kebutuhan operasional kitchen crew dan manajemen office.
+## 1. Tujuan
+Aplikasi web *Single Page Application* (SPA) ini bertujuan untuk mendigitalkan dan menstandarisasi *Standard Operating Procedure* (SOP) pembuatan menu kuliner di seluruh gerai/outlet restoran. Sistem ini dirancang untuk:
+* Menghilangkan disparitas rasa dan inkonsistensi penyajian antar-outlet melalui panduan takaran bahan dan langkah operasional yang terpusat.
+* Memfasilitasi staf dapur (*kitchen crew*) dalam mengakses instruksi memasak secara interaktif dan cepat di lingkungan kerja dapur.
+* Membantu tim manajemen/kantor pusat dalam mengelola katalog resep, memonitor kelengkapan SOP, dan mengawasi aktivitas akses akun staf.
+* Menyediakan pembuatan draf SOP secara otomatis berbantuan AI (*AI-assisted recipe generation*) dengan arsitektur serverless yang aman.
 
 ---
 
-## Fitur Utama (Berdasarkan Kode Sumber)
+## 2. Fitur (Berdasarkan Kode Sumber)
 
-### 1. Galeri Resep Interaktif (Kitchen Crew & Admin)
-* **Smart Filter & Multi-Criteria Sorting:** Pencarian menu berdasarkan nama resep, bahan, maupun deskripsi; penyaringan kategori dinamis; dan pengurutan (Terbaru, Terlama, A–Z, Z–A).
-* **Voice Search:** Pencarian resep hands-free menggunakan Web Speech API (`webkitSpeechRecognition`), memudahkan staf dapur saat tangan sedang bekerja.
-* **Dual View Modes:** Pilihan visualisasi antara Grid Card standar atau Mode Akordeon (*Group by Category*).
-* **Fast Image Rendering:** Konversi otomatis URL Google Drive ke Google User Content CDN (`lh3.googleusercontent.com`) dengan lazy-loading dan fallback placeholder.
+### A. Galeri & Pencarian Resep (`pages/Home.tsx`, `components/RecipeCard.tsx`, `components/AccordionView.tsx`)
+* **Pencarian Multi-Kriteria:** Pencarian teks berdasarkan nama menu, bahan-bahan, atau deskripsi resep secara instan.
+* **Voice Search:** Pencarian hands-free berbasis suara menggunakan Web Speech API (`webkitSpeechRecognition`), memudahkan staf saat tangan aktif di dapur.
+* **Penyaringan & Pengurutan:** Filter berdasarkan kategori dinamis serta opsi pengurutan (Terbaru, Terlama, Nama A–Z, Nama Z–A).
+* **Mode Tampilan Ganda:** Pilihan visualisasi antara tampilan kisi (*Grid Card View*) dan mode akordeon terkelompok per kategori (*Accordion Grouped View*).
+* **CDN Image Resolver:** Konversi otomatis tautan gambar Google Drive menjadi URL CDN Google User Content (`lh3.googleusercontent.com`) dengan penanganan fallback placeholder jika gambar gagal dimuat.
 
-### 2. Standar Operasional Prosedur (SOP) Dapur
-* **Parsing Terstruktur:** Otomasi ekstraksi data bahan (nama, takaran, satuan), alat masak, dan porsi penyajian.
-* **Numbered Method Steps:** Langkah-langkah pembuatan ditampilkan berurutan secara bertahap (*step-by-step guidance*).
+### B. Detail Standar Operasional Prosedur (`pages/RecipeDetail.tsx`, `components/PortionCalculator.tsx`)
+* **Pengelompokan Komponen Masak:** Parsing dan visualisasi terpisah untuk takaran bahan, satuan, alat masak yang dibutuhkan, dan porsi penyajian standar.
+* **Panduan Bertahap (*Step-by-Step*):** Langkah pembuatan disajikan berurutan dan terstruktur dengan penomoran jelas.
 
-### 3. Manajemen Resep & Kategori (Admin Dashboard)
-* **Full CRUD Resep:** Penambahan, pembaruan, dan penghapusan resep dengan modal verifikasi status kelengkapan SOP (*Lengkap* vs *Belum Lengkap* beserta pencatatan alasan).
-* **Manajemen Kategori Dinamis:** Pengelolaan kategori menu yang langsung terhubung ke database Supabase.
-* **Mini Analytics:** Ringkasan total menu, persentase kelengkapan SOP, dan visualisasi distribusi kategori menu.
+### C. Manajemen Resep & Kategori Admin (`pages/admin/RecipeForm.tsx`, `pages/admin/CategoryManager.tsx`, `pages/admin/AdminDashboard.tsx`)
+* **Operasi CRUD Lengkap:** Pembuatan, pembaruan, dan penghapusan resep beserta bahan dan alat secara dinamis.
+* **Audit Kelengkapan SOP:** Verifikasi status SOP (*Lengkap* vs *Belum Lengkap*) dengan pencatatan alasan spesifik (misal: bahan/langkah belum diverifikasi).
+* **Manajemen Kategori:** Penambahan, pengeditan, dan penghapusan kategori menu yang terhubung ke database Supabase.
+* **Metrik Operasional:** Ringkasan total menu, persentase kelengkapan SOP, dan distribusi kategori menu.
 
-### 4. AI-Powered Recipe Generation (Secure Serverless Architecture)
-* Pembuatan draf SOP otomatis (deskripsi + langkah pembuatan) berbasis nama menu, bahan, dan alat masak melalui endpoint backend Vercel Serverless Functions (`/api/generate-recipe`).
-* Didukung model bahasa performa tinggi (*Groq Llama 3.1 8B Instant* dengan fallback otomatis ke *Google Gemini 1.5 Flash*).
+### D. Otomasi Pembuatan SOP Berbantuan AI (`services/aiResepBaru.ts`, `api/generate-recipe.ts`)
+* **Draf SOP Otomatis:** Menghasilkan deskripsi dan urutan langkah pembuatan menu terstruktur dari nama menu, daftar bahan, dan alat.
+* **Multi-Provider Serverless Fallback:** Pemrosesan AI dieksekusi di backend Vercel Serverless Function menggunakan *Groq Llama 3.1 8B Instant* dengan fallback otomatis ke *Google Gemini 1.5 Flash*.
 
-### 5. Manajemen Tim & Pengawasan Akses (*Access Activity*)
-* **Device & Session Monitoring:** Pendeteksian browser, OS, dan tipe perangkat (*mobile/desktop*) sesi aktif berbasis User Agent parsing.
-* **Manajemen Pengguna Internal:** Admin dapat membuat akun baru untuk kru dan mengelola hak akses (*Admin* vs *Crew*).
-* **Self-Service Password Update:** Pengguna yang aktif dapat memperbarui kata sandi secara langsung.
+### E. Manajemen Tim & Pengawasan Akses (`pages/CrewManagement.tsx`, `pages/OurTeam.tsx`)
+* **Monitoring Sesi & Perangkat:** Parsing User Agent untuk mendeteksi nama browser, sistem operasi, dan tipe perangkat (*mobile/desktop*) serta status keaktifan sesi.
+* **Manajemen Akun Kru:** Admin dapat mendaftarkan akun baru untuk staf dapur dan mengatur role (*Admin* / *Crew*).
+* **Pembaruan Mandiri Kata Sandi:** Antarmuka pembaruan kata sandi bagi pengguna yang sedang aktif.
 
-### 6. Proteksi UI & Pencegahan Kebocoran Data (*Client-Side Data Defense*)
-* **Security Overlay:** Layar aplikasi otomatis terkunci (*blur blackout*) ketika tab browser kehilangan fokus atau pengguna berpindah aplikasi.
-* **Anti-Copy & Anti-DevTools Helper:** Pencegahan klik kanan, seleksi teks resep, dan media query cetak (`@media print`) yang menyembunyikan konten jika terdeteksi perintah cetak/ekspor layar.
+### F. Proteksi Tampilan & Pencegahan Kebocoran Data (`components/SecurityOverlay.tsx`, `components/ProtectedRoute.tsx`)
+* **Security Overlay:** Menutup layar (*blackout blur*) otomatis saat tab peramban kehilangan fokus atau beralih aplikasi.
+* **Anti-Copy & Anti-Print:** Pencegahan klik kanan, pemblokiran seleksi teks resep, dan media query cetak (`@media print`) untuk menyembunyikan resep saat upaya ekspor/cetak terdeteksi.
+* **Route Guarding:** Validasi status login dan peran pengguna sebelum merender halaman operasional internal.
 
 ---
 
-## Arsitektur Sistem
+## 3. Tech Stack
 
-Pemanggilan API AI (Groq / Gemini) dialihkan dari browser ke Vercel Serverless Function di sisi server demi melindungi *secret credentials*.
+| Layer / Kategori | Teknologi | Deskripsi Penggunaan |
+|---|---|---|
+| **Frontend Framework** | React 19, TypeScript | Komponen UI modular dengan deklarasi tipe data yang ketat. |
+| **Build Tool** | Vite 6 | Bundler modern dengan *Fast Refresh* dan build produksi teroptimasi. |
+| **Routing** | React Router DOM v7 | Manajemen navigasi halaman dan rute terproteksi (*protected routes*). |
+| **Database & Auth** | Supabase (PostgreSQL, GoTrue) | Database relasional untuk resep/kategori/profil serta autentikasi pengguna. |
+| **Serverless API** | Vercel Serverless Functions | Backend endpoint (`api/`) untuk mengisolasi kredensial dan pemanggilan API AI. |
+| **AI LLM Inference** | Groq Cloud & Google Gemini | Inferensi model bahasa via Llama 3.1 8B dan Gemini 1.5 Flash. |
+| **Styling** | Tailwind CSS & Glassmorphism | Desain antarmuka responsif dengan aksen warna khas restoran. |
+| **Notifikasi** | React Hot Toast | Feedback visual non-blocking untuk interaksi CRUD dan autentikasi. |
+| **Utilitas Data** | PapaParse | Parser CSV untuk pemrosesan data tabular. |
+
+---
+
+## 4. Arsitektur Sistem
+
+Seluruh pemanggilan model AI (Groq & Gemini) dialihkan dari peramban (*client-side*) ke Vercel Serverless Function di sisi server (`api/generate-recipe.ts`). Hal ini memastikan *API keys* tidak pernah terekspos ke bundel JavaScript publik.
 
 ```mermaid
 flowchart TD
     subgraph Client ["Client Browser (Single Page Application)"]
         UI["React 19 + Vite Frontend"]
-        Auth["AuthContext & ProtectedRoute"]
+        AuthContext["AuthContext & ProtectedRoute"]
         ClientAI["services/aiResepBaru.ts"]
     end
 
     subgraph Serverless ["Vercel Serverless Backend (Node.js)"]
-        APIRoute["POST /api/generate-recipe\n(api/generate-recipe.ts)"]
+        APIRoute["POST /api/generate-recipe\n(api/generate-recipe.ts)\n• Validasi Sesi Supabase\n• Input Length & Token Limits"]
     end
 
     subgraph CloudServices ["Cloud Infrastructure & AI Providers"]
-        SupaDB[("Supabase\nPostgreSQL + Auth")]
-        GroqCloud["Groq Cloud API\n(Llama-3.1-8b-instant)"]
+        SupaDB[("Supabase\nPostgreSQL Database & Auth")]
+        GroqCloud["Groq Cloud API\n(Llama 3.1 8B Instant)"]
         GeminiCloud["Google Gemini API\n(Gemini 1.5 Flash)"]
     end
 
-    UI -->|Session & Auth Token| Auth
-    UI -->|Direct BaaS Query / Anon Key| SupaDB
-    ClientAI -->|POST JSON payload| APIRoute
+    UI -->|Sesi Akun & Token JWT| AuthContext
+    UI -->|Kueri Data Resep / Anon Key| SupaDB
+    ClientAI -->|POST Payload + Header Authorization| APIRoute
+    APIRoute -->|Verifikasi Token Sesi| SupaDB
     APIRoute -->|Private GROQ_API_KEY| GroqCloud
     APIRoute -.->|Fallback: Private GEMINI_API_KEY| GeminiCloud
 ```
 
 ---
 
-## Tech Stack
-
-| Layer | Teknologi |
-|---|---|
-| **Frontend Framework** | React 19, TypeScript, Vite 6 |
-| **Routing & Auth State** | React Router DOM v7, React Context API |
-| **Styling & UI Effects** | Tailwind CSS (CDN Engine), Glassmorphism UI, Custom CSS Keyframe Orbs |
-| **Backend & Database** | Supabase (PostgreSQL Database, GoTrue Auth, Row Level Security) |
-| **Serverless Backend** | Vercel Serverless Functions (TypeScript/Node.js) |
-| **AI Providers** | Groq Cloud (Llama 3.1 8B) & Google Gemini (1.5 Flash) |
-| **Notification** | React Hot Toast |
-| **Data Utility** | PapaParse (CSV parser) |
-
----
-
-## Panduan Menjalankan Proyek (*Getting Started*)
+## 5. Cara Menjalankan Proyek
 
 ### Prasyarat
 * Node.js versi 18 ke atas
 * npm versi 9 ke atas
 
-### Langkah Instalasi
+### Langkah Menjalankan Secara Lokal
 
-1. **Clone repository dan masuk ke direktori proyek:**
+1. **Clone repository:**
    ```bash
    git clone https://github.com/tasya/digital-recipe.git
    cd digital-recipe
    ```
 
-2. **Instal dependensi:**
+2. **Instal seluruh dependensi:**
    ```bash
    npm install
    ```
 
-3. **Konfigurasi Environment Variables:**
-   Salin file template `.env.example` ke `.env.local`:
+3. **Siapkan environment variables:**
+   Salin berkas template `.env.example` ke `.env.local`:
    ```bash
    cp .env.example .env.local
    ```
-   Isi konfigurasi sesuai kredensial Anda:
-   ```env
-   # Frontend Client (Wajib)
-   VITE_SUPABASE_URL=https://your-project.supabase.co
-   VITE_SUPABASE_ANON_KEY=your-supabase-anon-key
+   Variabel yang dikonfigurasi pada `.env.local`:
+   * `VITE_SUPABASE_URL`
+   * `VITE_SUPABASE_ANON_KEY`
+   * `GROQ_API_KEY`
+   * `GEMINI_API_KEY`
 
-   # Serverless Backend AI (Opsional untuk fitur AI di Vercel / server)
-   GROQ_API_KEY=gsk_your_groq_api_key
-   GEMINI_API_KEY=your_gemini_api_key
-   ```
-
-4. **Jalankan local development server:**
+4. **Jalankan development server:**
    ```bash
    npm run dev
    ```
-   Buka peramban pada alamat `http://localhost:3000`.
+   Aplikasi dapat diakses melalui peramban pada `http://localhost:3000`.
 
-5. **Build untuk produksi:**
+5. **Uji build produksi:**
    ```bash
    npm run build
    ```
 
 ---
 
-## Tangkapan Layar Aplikasi (*Screenshots*)
+## 6. Konfigurasi Deploy di Vercel
 
-> *Catatan: Seluruh data resep dan foto di bawah merupakan dummy data untuk keperluan demonstrasi.*
+Saat mendeploy proyek ke platform Vercel, daftarkan variabel lingkungan berikut pada menu **Project Settings > Environment Variables**:
 
-| Halaman | Pratinjau |
-|---|---|
-| **Galeri Resep** | `TODO(Tasya): Tambahkan screenshot galeri resep dengan dummy data` |
-| **Detail SOP Menu** | `TODO(Tasya): Tambahkan screenshot tampilan detail langkah SOP resep` |
-| **Admin Dashboard** | `TODO(Tasya): Tambahkan screenshot tabel kelola menu dan statistik` |
-| **Login Activity & Tim** | `TODO(Tasya): Tambahkan screenshot monitoring sesi akun dan device` |
+### A. Environment Variables Client (Vite)
+* `VITE_SUPABASE_URL`
+* `VITE_SUPABASE_ANON_KEY`
+
+### B. Environment Variables Server (Vercel Serverless Functions)
+* `GROQ_API_KEY`
+* `GEMINI_API_KEY`
+* `SUPABASE_URL` *(opsional jika menggunakan `VITE_SUPABASE_URL`)*
+* `SUPABASE_ANON_KEY` *(opsional jika menggunakan `VITE_SUPABASE_ANON_KEY`)*
+
+> **Catatan Keamanan:** Kunci `GROQ_API_KEY` dan `GEMINI_API_KEY` TIDAK boleh memakai awalan `VITE_` agar tidak disertakan ke dalam bundel aset statis publik.
 
 ---
 
-## Kontributor & Pembagian Peran
+## 7. Tangkapan Layar Aplikasi (*Screenshots*)
 
-Proyek ini dibangun secara kolaboratif oleh tim 2 orang:
+> *Catatan: Data resep dan identitas kru pada screenshot berikut menggunakan data dummy non-sensitif.*
+
+| Tampilan Halaman | Pratinjau Antarmuka |
+|---|---|
+| **Galeri Katalog Resep** | `TODO(Tasya): Tambahkan screenshot galeri katalog resep dengan data dummy` |
+| **Detail SOP & Takaran Bahan** | `TODO(Tasya): Tambahkan screenshot tampilan detail langkah SOP resep` |
+| **Admin Dashboard & Metrik** | `TODO(Tasya): Tambahkan screenshot tabel resep dan indikator kelengkapan SOP` |
+| **Manajemen Tim & Login Activity** | `TODO(Tasya): Tambahkan screenshot daftar akun kru dan monitoring sesi` |
+
+---
+
+## 8. Asal Proyek
+
+Proyek ini awalnya diinisiasi dari scaffold otomatis **Google AI Studio**, kemudian dikembangkan, dimodifikasi arsitekturnya, dan disesuaikan menjadi sistem aplikasi operasional internal restoran oleh tim pengembang. Dokumentasi berkas metadata scaffold bawaan telah diarsipkan secara rapi di `docs/archive/metadata.json`.
+
+---
+
+## 9. Kontributor & Pembagian Peran
+
+Proyek ini dikembangkan secara kolaboratif oleh tim beranggotakan 2 orang:
 
 | Kontributor | Kontribusi Berdasarkan Riwayat Git (`git log`) |
 |---|---|
-| **heyjule** (`julianiputri077@gmail.com`) | • Inisialisasi awal integrasi AI (Gemini & Groq) di `services/`.<br>• Implementasi awal fetch dan visualisasi data resep dari database Supabase.<br>• Integrasi aset branding logo dan setup konfigurasi awal Vercel deployment.<br>• Penambahan fungsionalitas manajemen akun outlet. |
-| **Tasya / syaurr** (`urfahtasya@gmail.com`) | • Desain ulang antarmuka modern (*Glassmorphism*, palet Balista, animasi orbs, responsivitas mobile).<br>• Arsitektur CRUD komprehensif untuk Resep dan Kategori (validasi form, dynamic steps/ingredients, filter/sort).<br>• Implementasi fitur keamanan klien (Security Overlay, proteksi anti-copy/anti-print, ProtectedRoute).<br>• Pengembangan dasbor admin, status verifikasi kelengkapan SOP, dan monitoring aktivitas sesi/device.<br>• Refaktorisasi arsitektur keamanan serverless API (`api/generate-recipe.ts`) dan pembersihan dependensi. |
-| **Peran Lainnya** | `TODO(Tasya): Lengkapi pembagian tugas non-commit (misal: pengumpulan data resep, wawancara operasional restoran, usability testing).` |
-
----
-
-## Lisensi & Atribusi
-Hak Cipta (c) Balista Sushi & Tea. Dikembangkan untuk keperluan operasional internal dan portofolio teknis tim pengembang.
-Dokumentasi artefak internal Google AI Studio telah diarsipkan di `docs/archive/metadata.json`.
+| **heyjule** (`julianiputri077@gmail.com`) | • Inisialisasi awal integrasi AI (Gemini & Groq) di direktori `services/`.<br>• Implementasi awal pengambilan dan rendering data resep dari database Supabase.<br>• Integrasi aset branding visual logo dan konfigurasi awal file deployment Vercel.<br>• Penambahan fungsi dasar pembuatan akun pengguna untuk outlet. |
+| **Tasya / syaurr** (`urfahtasya@gmail.com`) | • Desain ulang antarmuka modern (*Glassmorphism*, palet warna Balista, animasi keyframe, responsivitas mobile).<br>• Arsitektur CRUD komprehensif untuk Resep dan Kategori (validasi form dinamis, audit kelengkapan SOP, filter/sorting).<br>• Implementasi fitur keamanan sisi klien (Security Overlay, proteksi anti-copy/anti-print, ProtectedRoute).<br>• Pengembangan dasbor analitik admin dan monitoring sesi/perangkat kru.<br>• Refaktorisasi keamanan backend serverless (`api/generate-recipe.ts`), pembersihan dependensi, dan eliminasi paparan secret. |
+| **Tugas Non-Coding / Operasional** | `TODO(Tasya): Lengkapi pembagian tugas non-commit (seperti wawancara alur dapur outlet, riset operasional restoran, usability testing, dan penyusunan SOP manual).` |
