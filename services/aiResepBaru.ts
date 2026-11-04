@@ -1,47 +1,36 @@
-const GROQ_API_KEY = import.meta.env.VITE_GROQ_API_KEY; 
-const GROQ_URL = "https://api.groq.com/openai/v1/chat/completions";
-
+/**
+ * Layanan untuk mengenerate detail SOP resep menggunakan AI.
+ * Seluruh pemanggilan AI dialihkan ke Vercel Serverless Function (/api/generate-recipe)
+ * agar API key (Groq / Gemini) tetap aman di sisi server dan tidak terekspos ke bundel client.
+ */
 export const generateRecipeDetails = async (payload: any) => {
-    // Menyesuaikan dengan struktur data yang dikirim dari RecipeForm/AdminDashboard
-    const namaMenu = payload.namaMenu || payload.nama || "";
-    const bahan = payload.bahan || "";
-    const alat = payload.alat || "";
-    
-    if (!GROQ_API_KEY) {
-        console.error("API Key Groq tidak ditemukan di .env.local");
-        return null;
+  const namaMenu = payload?.namaMenu || payload?.nama || '';
+  const bahan = payload?.bahan || '';
+  const alat = payload?.alat || '';
+
+  try {
+    const response = await fetch('/api/generate-recipe', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        namaMenu,
+        bahan,
+        alat,
+      }),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.error || `HTTP error ${response.status}`);
     }
 
-    const prompt = `Buat SOP detail untuk menu: "${namaMenu}". Bahan: ${bahan}. Alat: ${alat}. 
-    WAJIB JSON MURNI: {
-        "description": "1 kalimat deskripsi menarik",
-        "steps": ["Langkah 1...", "Langkah 2...", "Langkah 3..."]
-    }`;
-
-    try {
-        const response = await fetch(GROQ_URL, {
-            method: "POST",
-            headers: {
-                "Authorization": `Bearer ${GROQ_API_KEY}`,
-                "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-                model: "llama-3.1-8b-instant", // Model yang kamu pilih, super cepat!
-                messages: [{ role: "user", content: prompt }],
-                response_format: { type: "json_object" },
-                temperature: 0.2,
-            }),
-        });
-
-        const result = await response.json();
-        
-        if (!response.ok) {
-            throw new Error(result.error?.message || "Gagal menghubungi AI");
-        }
-
-        return JSON.parse(result.choices[0].message.content);
-    } catch (error) {
-        console.error("AI Error:", error);
-        return null;
-    }
+    const data = await response.json();
+    return data;
+  } catch (error) {
+    // Tangani error secara aman tanpa mencetak data sensitif
+    console.error('Gagal mengambil SOP dari AI serverless endpoint:', error);
+    return null;
+  }
 };
