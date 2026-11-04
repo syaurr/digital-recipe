@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { supabase } from '../services/supabaseClient';
-import { createClient } from '@supabase/supabase-js';
+import { supabase, createIsolatedClient } from '../services/supabaseClient';
 import Layout from '../components/Layout';
 import toast from 'react-hot-toast';
 
@@ -161,11 +160,7 @@ const CrewManagement = () => {
     try {
       // Create a secondary client that does NOT persist session
       // This prevents the current admin from being logged out when creating a new user
-      const tempClient = createClient(
-        import.meta.env.VITE_SUPABASE_URL,
-        import.meta.env.VITE_SUPABASE_ANON_KEY,
-        { auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false } }
-      );
+      const tempClient = createIsolatedClient();
 
       const { data, error } = await tempClient.auth.signUp({
         email: newUser.email,
